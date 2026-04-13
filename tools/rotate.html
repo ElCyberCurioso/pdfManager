@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rotar PDF — PDF Manager</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a href="../index.html" class="site-logo">
+        <div class="site-logo__icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <span>PDF<span>Manager</span></span>
+      </a>
+      <nav class="breadcrumb">
+        <a href="../index.html">Inicio</a>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span>Rotar PDF</span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="tool-page">
+
+    <div class="tool-header">
+      <div class="tool-header__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </div>
+      <h1 class="tool-header__title">Rotar PDF</h1>
+      <p class="tool-header__desc">Selecciona las páginas que quieres rotar y aplica la rotación deseada.</p>
+    </div>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input" id="fileInput" accept=".pdf">
+      <svg class="drop-zone__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo</p>
+    </div>
+
+    <!-- Controls (hidden until file loaded) -->
+    <div class="options-panel" id="optionsPanel">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-3);">
+        <div style="display:flex; gap:var(--space-2); flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" id="selectAllBtn">Seleccionar todas</button>
+          <button class="btn btn-ghost btn-sm" id="deselectAllBtn">Deseleccionar</button>
+        </div>
+        <div style="display:flex; gap:var(--space-2); flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" id="rotLeft" title="Rotar -90°">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            −90°
+          </button>
+          <button class="btn btn-secondary btn-sm" id="rotRight" title="Rotar +90°">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            +90°
+          </button>
+          <button class="btn btn-ghost btn-sm" id="rot180">180°</button>
+          <button class="btn btn-ghost btn-sm" id="resetRot">Restablecer</button>
+        </div>
+      </div>
+      <div class="page-grid" id="pageGrid"></div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progressWrap" style="display:none;">
+      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+      <p class="progress-label" id="progressLabel">Procesando…</p>
+    </div>
+
+    <!-- Action -->
+    <div class="action-bar" id="actionBar" style="display:none;">
+      <button class="btn btn-primary btn-lg" id="applyBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Aplicar rotación
+      </button>
+    </div>
+
+    <!-- Result -->
+    <div class="result-area" id="resultArea">
+      <div class="result-area__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2 class="result-area__title">¡Rotación aplicada!</h2>
+      <p class="result-area__meta" id="resultMeta"></p>
+      <button class="btn btn-primary" id="downloadBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Descargar PDF
+      </button>
+      <button class="btn btn-ghost btn-sm" id="startOverBtn">Empezar de nuevo</button>
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p class="site-footer__copy">PDF Manager — Procesamiento 100% en el navegador.</p>
+    </div>
+  </footer>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="../assets/js/core/ui.js"></script>
+  <script src="../assets/js/core/download.js"></script>
+  <script src="../assets/js/core/pdf-engine.js"></script>
+  <script src="../assets/js/core/file-handler.js"></script>
+  <script src="../assets/js/core/preview.js"></script>
+  <script src="../assets/js/tools/rotate.js"></script>
+</body>
+</html>

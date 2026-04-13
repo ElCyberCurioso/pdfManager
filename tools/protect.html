@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proteger PDF — PDF Manager</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a href="../index.html" class="site-logo">
+        <div class="site-logo__icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <span>PDF<span>Manager</span></span>
+      </a>
+      <nav class="breadcrumb">
+        <a href="../index.html">Inicio</a>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span>Proteger PDF</span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="tool-page">
+
+    <div class="tool-header">
+      <div class="tool-header__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h1 class="tool-header__title">Proteger PDF</h1>
+      <p class="tool-header__desc">Añade contraseña a tu PDF para restringir quién puede abrirlo o modificarlo.</p>
+    </div>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input" id="fileInput" accept=".pdf">
+      <svg class="drop-zone__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo</p>
+    </div>
+
+    <!-- Options -->
+    <div class="options-panel" id="optionsPanel">
+
+      <div class="alert alert-warning">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span><strong>Nota:</strong> La encriptación aplicada (RC4-40 bits) es básica. No uses esta herramienta para documentos altamente confidenciales; usa Acrobat o LibreOffice para AES-256.</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-5);">
+
+        <div class="form-group">
+          <label class="form-label" for="userPwd">Contraseña para abrir</label>
+          <div class="password-wrap">
+            <input type="password" class="form-input" id="userPwd" placeholder="Contraseña de apertura">
+            <button type="button" class="password-toggle" data-target="userPwd">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span class="form-hint">Los usuarios necesitarán esta contraseña para ver el PDF.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="ownerPwd">Contraseña de propietario</label>
+          <div class="password-wrap">
+            <input type="password" class="form-input" id="ownerPwd" placeholder="Contraseña de propietario">
+            <button type="button" class="password-toggle" data-target="ownerPwd">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span class="form-hint">Controla los permisos de edición e impresión.</span>
+        </div>
+
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Permisos</label>
+        <div style="display:flex; flex-wrap:wrap; gap:var(--space-4);">
+          <label class="check-group"><input type="checkbox" class="form-checkbox" id="permPrint" checked> Permitir impresión</label>
+          <label class="check-group"><input type="checkbox" class="form-checkbox" id="permCopy" checked> Permitir copiar texto</label>
+          <label class="check-group"><input type="checkbox" class="form-checkbox" id="permModify"> Permitir modificar</label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Progress -->
+    <div id="progressWrap" style="display:none;">
+      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+      <p class="progress-label" id="progressLabel">Procesando…</p>
+    </div>
+
+    <!-- Action -->
+    <div class="action-bar" id="actionBar" style="display:none;">
+      <button class="btn btn-primary btn-lg" id="protectBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Proteger PDF
+      </button>
+    </div>
+
+    <!-- Result -->
+    <div class="result-area" id="resultArea">
+      <div class="result-area__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2 class="result-area__title">¡PDF protegido!</h2>
+      <p class="result-area__meta" id="resultMeta"></p>
+      <button class="btn btn-primary" id="downloadBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Descargar PDF protegido
+      </button>
+      <button class="btn btn-ghost btn-sm" id="startOverBtn">Empezar de nuevo</button>
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p class="site-footer__copy">PDF Manager — Procesamiento 100% en el navegador.</p>
+    </div>
+  </footer>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="../assets/js/core/ui.js"></script>
+  <script src="../assets/js/core/download.js"></script>
+  <script src="../assets/js/core/pdf-engine.js"></script>
+  <script src="../assets/js/core/file-handler.js"></script>
+  <script src="../assets/js/tools/protect.js"></script>
+</body>
+</html>

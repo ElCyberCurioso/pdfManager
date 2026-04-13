@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comprimir PDF — PDF Manager</title>
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a href="../index.html" class="site-logo">
+        <div class="site-logo__icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <span>PDF<span>Manager</span></span>
+      </a>
+      <nav class="breadcrumb">
+        <a href="../index.html">Inicio</a>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span>Comprimir PDF</span>
+      </nav>
+    </div>
+  </header>
+
+  <main class="tool-page">
+
+    <div class="tool-header">
+      <div class="tool-header__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="20" x2="21" y2="9"/><line x1="3" y1="15" x2="14" y2="4"/></svg>
+      </div>
+      <h1 class="tool-header__title">Comprimir PDF</h1>
+      <p class="tool-header__desc">Reduce el tamaño del archivo PDF. Elige entre modo seguro (sin pérdida de texto) o modo imagen (mayor reducción).</p>
+    </div>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input" id="fileInput" accept=".pdf">
+      <svg class="drop-zone__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo</p>
+    </div>
+
+    <!-- Options -->
+    <div class="options-panel" id="optionsPanel">
+
+      <!-- File info -->
+      <div style="display:flex; gap:var(--space-6); flex-wrap:wrap;">
+        <div>
+          <p class="text-sm text-muted">Tamaño original</p>
+          <p style="font-size:var(--text-2xl); font-weight:700;" id="originalSize">—</p>
+        </div>
+        <div>
+          <p class="text-sm text-muted">Páginas</p>
+          <p style="font-size:var(--text-2xl); font-weight:700;" id="pageCount">—</p>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Mode -->
+      <div class="form-group">
+        <label class="form-label">Modo de compresión</label>
+        <div style="display:flex; flex-direction:column; gap:var(--space-3);">
+          <label class="check-group" style="align-items:flex-start; gap:var(--space-3);">
+            <input type="radio" name="compressMode" value="safe" checked class="form-radio" style="margin-top:2px;">
+            <div>
+              <strong>Modo seguro</strong>
+              <p class="text-sm text-muted" style="margin:2px 0 0;">Elimina objetos no utilizados y optimiza la estructura. El texto sigue siendo seleccionable. Reducción moderada (~5–20%).</p>
+            </div>
+          </label>
+          <label class="check-group" style="align-items:flex-start; gap:var(--space-3);">
+            <input type="radio" name="compressMode" value="image" class="form-radio" style="margin-top:2px;">
+            <div>
+              <strong>Modo imagen</strong>
+              <p class="text-sm text-muted" style="margin:2px 0 0;">Convierte cada página en imagen JPEG. Mayor reducción (~40–80%) pero <strong>el texto deja de ser seleccionable</strong>.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Quality (image mode only) -->
+      <div id="qualityWrap" style="display:none;">
+        <div class="alert alert-warning" style="margin-bottom:var(--space-4);">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>El modo imagen rasteriza el PDF. El texto, los vectores y las fuentes se convierten en píxeles. No es reversible.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Calidad de imagen</label>
+          <div style="display:flex; gap:var(--space-3);">
+            <label class="check-group"><input type="radio" name="quality" value="low" class="form-radio"> Baja (más pequeño)</label>
+            <label class="check-group"><input type="radio" name="quality" value="medium" checked class="form-radio"> Media</label>
+            <label class="check-group"><input type="radio" name="quality" value="high" class="form-radio"> Alta</label>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Progress -->
+    <div id="progressWrap" style="display:none;">
+      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+      <p class="progress-label" id="progressLabel">Procesando…</p>
+    </div>
+
+    <!-- Action -->
+    <div class="action-bar" id="actionBar" style="display:none;">
+      <button class="btn btn-primary btn-lg" id="compressBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="20" x2="21" y2="9"/><line x1="3" y1="15" x2="14" y2="4"/></svg>
+        Comprimir PDF
+      </button>
+    </div>
+
+    <!-- Result -->
+    <div class="result-area" id="resultArea">
+      <div class="result-area__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2 class="result-area__title">¡PDF comprimido!</h2>
+      <p class="result-area__meta" id="resultMeta"></p>
+      <button class="btn btn-primary" id="downloadBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Descargar PDF comprimido
+      </button>
+      <button class="btn btn-ghost btn-sm" id="startOverBtn">Empezar de nuevo</button>
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p class="site-footer__copy">PDF Manager — Procesamiento 100% en el navegador.</p>
+    </div>
+  </footer>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="../assets/js/core/ui.js"></script>
+  <script src="../assets/js/core/download.js"></script>
+  <script src="../assets/js/core/pdf-engine.js"></script>
+  <script src="../assets/js/core/file-handler.js"></script>
+  <script src="../assets/js/core/preview.js"></script>
+  <script src="../assets/js/tools/compress.js"></script>
+</body>
+</html>
