@@ -86,9 +86,14 @@
     ctx.textAlign   = 'center';
     ctx.textBaseline= 'middle';
 
+    // Canvas y-down: positive rotate = clockwise.
+    // pdf-lib y-up:  positive degrees = counterclockwise.
+    // Negate angle in canvas so both produce same visual direction.
+    const canvasAngle = -angle;
+
     if (mode === 'center') {
       ctx.translate(w / 2, h / 2);
-      ctx.rotate(angle);
+      ctx.rotate(canvasAngle);
       ctx.fillText(text, 0, 0);
     } else {
       // Tile
@@ -98,7 +103,7 @@
         for (let x = stepX / 2; x < w + stepX; x += stepX) {
           ctx.save();
           ctx.translate(x, y);
-          ctx.rotate(angle);
+          ctx.rotate(canvasAngle);
           ctx.fillText(text, 0, 0);
           ctx.restore();
         }
@@ -143,29 +148,38 @@
         const { width, height } = page.getSize();
         const textWidth = font.widthOfTextAtSize(text, size);
 
+        // pdf-lib rotates text around (x, y) counterclockwise (y-up space).
+        // To keep visual center at (cx, cy) after rotation by θ:
+        //   x = cx - (textWidth/2)*cos(θ) + (fontSize/2)*sin(θ)
+        //   y = cy - (textWidth/2)*sin(θ) - (fontSize/2)*cos(θ)
+        const θ = angleDeg * (Math.PI / 180);
+
+        function anchorFor(cx, cy, tw, fs) {
+          return {
+            x: cx - (tw / 2) * Math.cos(θ) + (fs / 2) * Math.sin(θ),
+            y: cy - (tw / 2) * Math.sin(θ) - (fs / 2) * Math.cos(θ),
+          };
+        }
+
         if (mode === 'center') {
+          const { x, y } = anchorFor(width / 2, height / 2, textWidth, size);
           page.drawText(text, {
-            x:       width  / 2 - textWidth / 2,
-            y:       height / 2,
-            size,
-            font,
-            color,
-            opacity,
-            rotate:  PDFLib.degrees(angleDeg),
+            x, y, size, font, color, opacity,
+            rotate: PDFLib.degrees(angleDeg),
           });
         } else {
           // Tile across page
-          const stepX = Math.max(textWidth + size * 2, width / 3);
-          const stepY = size * 4;
-          for (let ty = stepY / 2; ty < height + stepY; ty += stepY) {
-            for (let tx = stepX / 2; tx < width + stepX; tx += stepX) {
+          const tileSize  = Math.round(size * 0.7);
+          const tileWidth = font.widthOfTextAtSize(text, tileSize);
+          const stepX = Math.max(tileWidth + tileSize * 2, width / 3);
+          const stepY = tileSize * 4;
+          for (let cy = stepY / 2; cy < height + stepY; cy += stepY) {
+            for (let cx = stepX / 2; cx < width + stepX; cx += stepX) {
+              const { x, y } = anchorFor(cx, cy, tileWidth, tileSize);
               page.drawText(text, {
-                x: tx - textWidth / 2,
-                y: ty,
-                size: Math.round(size * 0.7),
-                font,
-                color,
-                opacity,
+                x, y,
+                size:   tileSize,
+                font, color, opacity,
                 rotate: PDFLib.degrees(angleDeg),
               });
             }
