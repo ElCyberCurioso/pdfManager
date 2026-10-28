@@ -1,152 +1,169 @@
 /* ============================================================
-   COMPRESS TOOL
+   COMPRIMIR PDF
+   - Sin pérdida: limpieza estructural y deduplicación.
+   - Imágenes (recomendado): recomprime fotos y bitmaps a la
+     calidad/resolución elegida; texto y vectores intactos.
+   - Rasterizar: cada página pasa a ser una imagen (escaneos).
    ============================================================ */
-(() => {
-  const dropZone      = document.getElementById('dropZone');
-  const fileInput     = document.getElementById('fileInput');
-  const optionsPanel  = document.getElementById('optionsPanel');
-  const actionBar     = document.getElementById('actionBar');
-  const compressBtn   = document.getElementById('compressBtn');
-  const progressWrap  = document.getElementById('progressWrap');
-  const progressBar   = document.getElementById('progressBar');
-  const progressLabel = document.getElementById('progressLabel');
-  const resultArea    = document.getElementById('resultArea');
-  const resultMeta    = document.getElementById('resultMeta');
-  const downloadBtn   = document.getElementById('downloadBtn');
-  const startOverBtn  = document.getElementById('startOverBtn');
-  const qualityWrap   = document.getElementById('qualityWrap');
+import '../core/app.js';
+import { $, $$, h, plural } from '../core/dom.js';
+import { toast, createProgress, formatBytes, toggle } from '../core/ui.js';
+import { loadPlain, createPdf, savePdf } from '../core/pdf-engine.js';
+import { losslessPass, recompressImages, imageStats, stripAllMetadata } from '../core/optimize.js';
+import { canvasToBlob } from '../core/render.js';
+import { singlePdfTool, runTask, yieldToUI, createResultArea, radioValue, bindRange, encryptedInputNote } from '../core/tool.js';
+import { buildName } from '../core/download.js';
 
-  const JPEG_QUALITY = { low: 0.4, medium: 0.65, high: 0.85 };
-  const SCALE        = { low: 0.75, medium: 0.9, high: 1.0 };
+const PRESETS = {
+  high:   { quality: 0.85, dpi: 200, label: 'Alta calidad' },
+  medium: { quality: 0.72, dpi: 150, label: 'Equilibrada' },
+  low:    { quality: 0.55, dpi: 100, label: 'Máxima compresión' },
+};
 
-  let currentFile   = null;
-  let currentBuffer = null;
-  let resultBytes   = null;
+const options   = $('#options');
+const actionBar = $('#actionBar');
+const runBtn    = $('#runBtn');
+const progress  = createProgress($('#progress'));
+const result    = createResultArea($('#result'), { onRestart: () => tool.reset() });
+const qualityIn = $('#quality');
+const dpiIn     = $('#dpi');
 
-  FileHandler.init(dropZone, fileInput, onFileAdded);
-  compressBtn.addEventListener('click', doCompress);
-  startOverBtn.addEventListener('click', reset);
-  downloadBtn.addEventListener('click', () => {
-    if (resultBytes) Download.save(resultBytes, Download.buildName(currentFile.name, '', '_comprimido'));
-  });
+const tool = singlePdfTool({ dropZone: $('#dropZone'), summary: $('#fileSummary'), onLoad, onReset });
 
-  // Show/hide quality panel based on mode
-  document.querySelectorAll('input[name="compressMode"]').forEach(r => {
-    r.addEventListener('change', () => {
-      qualityWrap.style.display = r.value === 'image' ? 'block' : 'none';
-    });
-  });
-
-  async function onFileAdded([file]) {
-    currentFile   = file;
-    currentBuffer = await PDFEngine.fileToBuffer(file).catch(() => null);
-    if (!currentBuffer) { UI.toast('Error al leer el PDF', 'error'); return; }
-
-    const pages = await Preview.getPageCount(currentBuffer);
-    document.getElementById('originalSize').textContent = UI.formatBytes(file.size);
-    document.getElementById('pageCount').textContent    = pages;
-
-    UI.show(optionsPanel);
-    actionBar.style.display = 'flex';
-    UI.hide(resultArea);
-    resultBytes = null;
+bindRange(qualityIn, $('#qualityVal'), (v) => `${v}%`);
+$$('input[name="mode"]').forEach((r) => r.addEventListener('change', syncMode));
+$$('input[name="preset"]').forEach((r) => r.addEventListener('change', applyPreset));
+[qualityIn, dpiIn].forEach((el) => el.addEventListener('input', () => {
+  const p = PRESETS[radioValue('preset')];
+  if (p && (Number(qualityIn.value) !== Math.round(p.quality * 100) || Number(dpiIn.value) !== p.dpi)) {
+    $$('input[name="preset"]').forEach((r) => { r.checked = false; });
   }
+  result.hide();
+}));
+runBtn.addEventListener('click', () => runTask(runBtn, progress, compress));
 
-  async function doCompress() {
-    const mode = document.querySelector('input[name="compressMode"]:checked').value;
+function onLoad(ctx) {
+  result.hide();
+  const { count, bytes } = imageStats(ctx.doc);
+  const share = ctx.file.size ? Math.round((bytes / ctx.file.size) * 100) : 0;
+  $('#analysis').replaceChildren(
+    stat('Tamaño actual', formatBytes(ctx.file.size)),
+    stat('Páginas', String(ctx.pageCount)),
+    stat('Imágenes', count ? `${count} · ${formatBytes(bytes)}` : 'ninguna'),
+  );
+  // Recomendación automática
+  const recommended = count && share > 25 ? 'images' : 'lossless';
+  $(`input[name="mode"][value="${recommended}"]`).checked = true;
+  $('#hint').textContent = count && share > 25
+    ? `Las imágenes ocupan aproximadamente el ${Math.min(share, 100)}% del archivo: recomprimirlas es lo más eficaz.`
+    : 'Este PDF apenas tiene imágenes: la optimización sin pérdida es la opción adecuada.';
+  syncMode();
+  toggle(options, true);
+  toggle(actionBar, true);
+}
 
-    UI.setButtonLoading(compressBtn, true);
-    progressWrap.style.display = 'block';
-    UI.hide(resultArea);
+function onReset() {
+  toggle(options, false);
+  toggle(actionBar, false);
+  result.hide();
+}
 
-    try {
-      if (mode === 'safe') {
-        resultBytes = await compressSafe();
-      } else {
-        const quality = document.querySelector('input[name="quality"]:checked').value;
-        resultBytes   = await compressImage(quality);
-      }
+const stat = (label, value, good = false) =>
+  h('div', { class: 'stat' }, h('div', { class: 'stat__label' }, label), h('div', { class: `stat__value${good ? ' is-good' : ''}` }, value));
 
-      const saved   = currentBuffer.byteLength - resultBytes.byteLength;
-      const pct     = Math.round((saved / currentBuffer.byteLength) * 100);
-      const sign    = saved >= 0 ? '-' : '+';
-      const absPct  = Math.abs(pct);
+function syncMode() {
+  const mode = radioValue('mode');
+  toggle($('#qualityBox'), mode !== 'lossless');
+  toggle($('#rasterWarn'), mode === 'raster');
+  result.hide();
+}
 
-      resultMeta.textContent = [
-        `Original: ${UI.formatBytes(currentBuffer.byteLength)}`,
-        `Resultado: ${UI.formatBytes(resultBytes.byteLength)}`,
-        saved >= 0 ? `Ahorro: ${sign}${absPct}%` : `(el PDF ya estaba optimizado)`,
-      ].join(' · ');
+function applyPreset() {
+  const p = PRESETS[radioValue('preset')];
+  if (!p) return;
+  qualityIn.value = String(Math.round(p.quality * 100));
+  qualityIn.dispatchEvent(new Event('input'));
+  dpiIn.value = String(p.dpi);
+}
 
-      UI.show(resultArea);
-      UI.toast('PDF comprimido correctamente', 'success');
-    } catch (err) {
-      UI.toast(`Error: ${err.message}`, 'error');
-    } finally {
-      UI.setButtonLoading(compressBtn, false);
-      setTimeout(() => { progressWrap.style.display = 'none'; }, 1200);
+async function compress() {
+  const ctx = tool.current;
+  const mode = radioValue('mode');
+  const quality = Math.min(0.95, Math.max(0.1, Number(qualityIn.value) / 100));
+  const dpi = Math.min(600, Math.max(36, Number(dpiIn.value) || 150));
+  const stripMeta = $('#stripMeta').checked;
+  const notes = [];
+  let bytes;
+  let detail = '';
+
+  if (mode === 'raster') {
+    bytes = await rasterize(ctx, { quality, dpi, stripMeta });
+    notes.push({ type: 'warning', text: 'Las páginas se han convertido en imágenes: el texto ya no se puede seleccionar ni buscar, y se pierden enlaces y formularios.' });
+  } else {
+    progress.set(5, 'Analizando…');
+    const doc = await loadPlain(ctx.bytes);
+    if (mode === 'images') {
+      const st = await recompressImages(doc, {
+        quality, maxDpi: dpi,
+        onProgress: (i, n) => progress.set(5 + (i / Math.max(1, n)) * 75, `Recomprimiendo imágenes (${Math.min(i + 1, n)}/${n})…`),
+      });
+      detail = st.recompressed
+        ? `${plural(st.recompressed, 'imagen recomprimida', 'imágenes recomprimidas')} (${formatBytes(st.before)} → ${formatBytes(st.after)})`
+        : 'ninguna imagen se podía reducir más';
+      const skipped = Object.entries(st.skipped).filter(([k]) => k === 'no compatible' || k === 'error');
+      if (skipped.length) notes.push({ type: 'info', text: `${skipped.reduce((s, [, n]) => s + n, 0)} imagen(es) en formatos no admitidos (CMYK, JPEG 2000, JBIG2…) se han dejado tal cual.` });
     }
-  }
-
-  // Safe mode: re-save with pdf-lib (strips dead objects, re-deflates streams)
-  async function compressSafe() {
-    UI.setProgress(progressBar, progressLabel, 30, 'Cargando PDF…');
-    const doc = await PDFEngine.load(PDFEngine.cloneBuffer(currentBuffer));
-    UI.setProgress(progressBar, progressLabel, 70, 'Optimizando…');
-    const bytes = await doc.save({ useObjectStreams: true });
-    UI.setProgress(progressBar, progressLabel, 100, 'Listo');
-    return bytes;
-  }
-
-  // Image mode: rasterize each page via PDF.js → canvas → JPEG → embed in new PDF
-  async function compressImage(qualityKey) {
-    const jpegQ = JPEG_QUALITY[qualityKey];
-    const scale = SCALE[qualityKey];
-
-    UI.setProgress(progressBar, progressLabel, 5, 'Cargando PDF…');
-    const pdfJs = await pdfjsLib.getDocument({ data: currentBuffer.slice(0) }).promise;
-    const total = pdfJs.numPages;
-    const out   = await PDFEngine.create();
-
-    for (let i = 1; i <= total; i++) {
-      UI.setProgress(progressBar, progressLabel,
-        5 + Math.round((i / total) * 88),
-        `Rasterizando página ${i} de ${total}…`
-      );
-
-      const page      = await pdfJs.getPage(i);
-      const viewport  = page.getViewport({ scale });
-      const canvas    = document.createElement('canvas');
-      canvas.width    = viewport.width;
-      canvas.height   = viewport.height;
-
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-
-      // Canvas → JPEG bytes
-      const dataUrl   = canvas.toDataURL('image/jpeg', jpegQ);
-      const b64       = dataUrl.split(',')[1];
-      const binary    = atob(b64);
-      const jpegBytes = new Uint8Array(binary.length);
-      for (let j = 0; j < binary.length; j++) jpegBytes[j] = binary.charCodeAt(j);
-
-      const img     = await out.embedJpg(jpegBytes);
-      const newPage = out.addPage([viewport.width, viewport.height]);
-      newPage.drawImage(img, { x: 0, y: 0, width: viewport.width, height: viewport.height });
+    progress.set(85, 'Optimizando estructura…');
+    await yieldToUI();
+    const lp = await losslessPass(doc, { stripMetadata: stripMeta });
+    if (mode === 'lossless') {
+      detail = [lp.removed && `${lp.removed} objetos sin uso`, lp.deduped && `${lp.deduped} duplicados`, lp.deflated && `${lp.deflated} streams comprimidos`]
+        .filter(Boolean).join(', ') || 'estructura reescrita';
     }
-
-    UI.setProgress(progressBar, progressLabel, 96, 'Guardando…');
-    const bytes = await PDFEngine.save(out);
-    UI.setProgress(progressBar, progressLabel, 100, 'Listo');
-    return bytes;
+    progress.set(95, 'Guardando…');
+    bytes = await savePdf(doc);
   }
+  progress.set(100, 'Listo');
 
-  function reset() {
-    currentFile = null; currentBuffer = null; resultBytes = null;
-    document.getElementById('originalSize').textContent = '—';
-    document.getElementById('pageCount').textContent    = '—';
-    UI.hide(optionsPanel);
-    actionBar.style.display = 'none';
-    progressWrap.style.display = 'none';
-    UI.hide(resultArea);
+  const before = ctx.file.size;
+  const after = bytes.length;
+  const saved = before - after;
+  const pct = before ? Math.round((saved / before) * 100) : 0;
+  if (saved <= 0) notes.unshift({ type: 'warning', text: 'El resultado no es más pequeño que el original (el PDF ya estaba bien optimizado). Te recomendamos conservar el original o probar otro modo.' });
+  const enc = encryptedInputNote(ctx);
+  if (enc) notes.push(enc);
+
+  result.show({
+    title: saved > 0 ? `¡${pct}% más ligero!` : 'Compresión completada',
+    meta: detail,
+    notes,
+    extra: h('div', { class: 'stats' },
+      stat('Original', formatBytes(before)),
+      stat('Resultado', formatBytes(after), saved > 0),
+      stat('Ahorro', saved > 0 ? `${pct}% (${formatBytes(saved)})` : '—', saved > 0)),
+    files: [{ name: buildName(ctx.file.name, '_comprimido'), data: bytes }],
+  });
+  toast(saved > 0 ? `Reducido un ${pct}%` : 'No se ha podido reducir más', saved > 0 ? 'success' : 'warning');
+}
+
+/** Convierte cada página en una imagen JPEG del MISMO tamaño físico. */
+async function rasterize(ctx, { quality, dpi, stripMeta }) {
+  const r = await ctx.getRender();
+  const out = await createPdf();
+  if (stripMeta) stripAllMetadata(out);
+  for (let n = 1; n <= ctx.pageCount; n++) {
+    progress.set(((n - 1) / ctx.pageCount) * 92, `Rasterizando página ${n} de ${ctx.pageCount}…`);
+    const size = await r.pageSize(n); // en puntos, con la rotación aplicada
+    const canvas = await r.renderPage(n, { dpi });
+    const jpg = new Uint8Array(await (await canvasToBlob(canvas, 'image/jpeg', quality)).arrayBuffer());
+    canvas.width = canvas.height = 0; // libera memoria
+    const img = await out.embedJpg(jpg);
+    const page = out.addPage([size.width, size.height]);
+    page.drawImage(img, { x: 0, y: 0, width: size.width, height: size.height });
   }
-})();
+  progress.set(95, 'Guardando…');
+  return savePdf(out);
+}
+
+toggle(options, false);
+toggle(actionBar, false);

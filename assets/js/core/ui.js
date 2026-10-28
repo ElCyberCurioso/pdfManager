@@ -1,78 +1,172 @@
 /* ============================================================
-   UI — Toast, progress bar, spinner helpers
+   UI — Toasts, progreso, estado de botones y diálogos modales.
    ============================================================ */
+import { h } from './dom.js';
+import { icon } from './icons.js';
 
-const UI = (() => {
-  // ---- Toast ----
-  function toast(message, type = 'info', duration = 3500) {
-    const container = document.getElementById('toastContainer');
-    if (!container) return;
+// ---- Toasts ----------------------------------------------------
+const TOAST_ICON = { success: 'check', error: 'error', warning: 'warning', info: 'info' };
 
-    const icons = {
-      success: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`,
-      error:   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-      warning: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-      info:    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
-    };
-
-    const el = document.createElement('div');
-    el.className = `toast toast-${type}`;
-    el.setAttribute('role', 'status');
-    el.innerHTML = `${icons[type] || icons.info}<span>${message}</span>`;
-    container.appendChild(el);
-
-    setTimeout(() => {
-      el.classList.add('toast-out');
-      el.addEventListener('animationend', () => el.remove(), { once: true });
-    }, duration);
+function toastContainer() {
+  let c = document.getElementById('toastContainer');
+  if (!c) {
+    c = h('div', { class: 'toast-container', id: 'toastContainer', 'aria-live': 'polite' });
+    document.body.append(c);
   }
+  return c;
+}
 
-  // ---- Progress ----
-  function setProgress(barEl, labelEl, value, text = '') {
-    if (barEl) barEl.style.width = `${Math.min(100, Math.max(0, value))}%`;
-    if (labelEl) labelEl.textContent = text || `${Math.round(value)}%`;
+/**
+ * Muestra una notificación. El mensaje se inserta como texto.
+ * @param {string} message
+ * @param {'info'|'success'|'warning'|'error'} [type]
+ * @param {number} [duration] ms
+ */
+export function toast(message, type = 'info', duration = 4000) {
+  const el = h('div', { class: `toast toast-${type}`, role: type === 'error' ? 'alert' : 'status' },
+    icon(TOAST_ICON[type] || 'info'),
+    h('span', {}, message),
+  );
+  toastContainer().append(el);
+  const close = () => {
+    el.classList.add('toast-out');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+    setTimeout(() => el.remove(), 600); // por si no hay animación (reduced motion)
+  };
+  setTimeout(close, type === 'error' ? Math.max(duration, 6000) : duration);
+  el.addEventListener('click', close);
+}
+
+// ---- Progreso --------------------------------------------------
+/**
+ * Controlador de barra de progreso.
+ * @param {HTMLElement} wrap  Contenedor (se muestra/oculta)
+ */
+export function createProgress(wrap) {
+  const bar   = wrap.querySelector('.progress-bar');
+  const label = wrap.querySelector('.progress-label');
+  const track = wrap.querySelector('.progress-wrap');
+  let hideTimer;
+  return {
+    show() {
+      clearTimeout(hideTimer);
+      wrap.hidden = false;
+      this.set(0, 'Preparando…');
+    },
+    set(pct, text) {
+      const v = Math.min(100, Math.max(0, pct));
+      if (bar) bar.style.width = `${v}%`;
+      if (track) track.setAttribute('aria-valuenow', String(Math.round(v)));
+      if (label) label.textContent = text || `${Math.round(v)}%`;
+    },
+    hide(delay = 900) {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => { wrap.hidden = true; }, delay);
+    },
+  };
+}
+
+// ---- Botones ---------------------------------------------------
+export function setButtonLoading(btn, loading, label = 'Procesando…') {
+  if (!btn) return;
+  if (loading) {
+    if (btn.dataset.loading) return;
+    btn.dataset.loading = '1';
+    btn.disabled = true;
+    btn._original = Array.from(btn.childNodes);
+    btn.replaceChildren(h('span', { class: 'spinner spinner-sm', 'aria-hidden': 'true' }), label);
+    btn.setAttribute('aria-busy', 'true');
+  } else {
+    if (!btn.dataset.loading) return;
+    delete btn.dataset.loading;
+    btn.disabled = false;
+    btn.replaceChildren(...(btn._original || []));
+    btn.removeAttribute('aria-busy');
   }
+}
 
-  function showProgress(wrapEl) {
-    if (wrapEl) wrapEl.style.display = 'block';
-  }
+// ---- Visibilidad ----------------------------------------------
+export const show   = (el) => el && (el.hidden = false);
+export const hide   = (el) => el && (el.hidden = true);
+export const toggle = (el, cond) => el && (el.hidden = !cond);
 
-  function hideProgress(wrapEl) {
-    if (wrapEl) wrapEl.style.display = 'none';
-  }
+// ---- Formato ---------------------------------------------------
+export function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const k = 1024;
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(k)));
+  const val = bytes / Math.pow(k, i);
+  return `${val.toLocaleString('es-ES', { maximumFractionDigits: i === 0 ? 0 : 1 })} ${units[i]}`;
+}
 
-  // ---- Button loading state ----
-  function setButtonLoading(btn, loading, originalText = '') {
-    if (!btn) return;
-    if (loading) {
-      btn.disabled = true;
-      btn._originalHTML = btn.innerHTML;
-      btn.innerHTML = `<span class="spinner" style="width:18px;height:18px;border-width:2px;"></span> Procesando…`;
-    } else {
-      btn.disabled = false;
-      btn.innerHTML = btn._originalHTML || originalText || btn.innerHTML;
+// ---- Diálogos (basados en <dialog>, accesibles por teclado) ----
+/**
+ * Pide un valor al usuario. Resuelve con el texto o null si cancela.
+ * @param {{title: string, message?: string, label?: string, type?: string,
+ *          confirmText?: string, error?: string, autocomplete?: string}} opts
+ */
+export function promptDialog({ title, message = '', label = '', type = 'text', confirmText = 'Aceptar', error = '', autocomplete = 'off' }) {
+  return new Promise((resolve) => {
+    const input = h('input', { class: 'form-input', type, id: 'dlgInput', autocomplete, spellcheck: 'false' });
+    const toggleBtn = type === 'password'
+      ? h('button', { type: 'button', class: 'password-toggle', 'aria-label': 'Mostrar u ocultar contraseña',
+          onclick: () => { input.type = input.type === 'password' ? 'text' : 'password'; input.focus(); } }, icon('eye'))
+      : null;
+    const errEl = h('p', { class: 'dialog__error', role: 'alert' }, error);
+    errEl.hidden = !error;
+
+    const form = h('form', { method: 'dialog', class: 'dialog__body' },
+      h('h2', { class: 'dialog__title' }, title),
+      message ? h('p', { class: 'dialog__msg' }, message) : null,
+      h('div', { class: 'form-group' },
+        label ? h('label', { class: 'form-label', for: 'dlgInput' }, label) : null,
+        type === 'password' ? h('div', { class: 'password-wrap' }, input, toggleBtn) : input,
+      ),
+      errEl,
+      h('div', { class: 'dialog__actions' },
+        h('button', { type: 'button', class: 'btn btn-ghost', value: 'cancel', onclick: () => finish(null) }, 'Cancelar'),
+        h('button', { type: 'submit', class: 'btn btn-primary', value: 'ok' }, confirmText),
+      ),
+    );
+    const dlg = h('dialog', { class: 'dialog', 'aria-labelledby': 'dlgTitle' }, form);
+    form.querySelector('.dialog__title').id = 'dlgTitle';
+
+    let done = false;
+    function finish(value) {
+      if (done) return;
+      done = true;
+      dlg.close();
+      dlg.remove();
+      resolve(value);
     }
-  }
+    form.addEventListener('submit', (e) => { e.preventDefault(); finish(input.value); });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); });
 
-  // ---- Show / hide elements ----
-  function show(el) {
-    if (el) el.classList.add('visible');
-  }
-  function hide(el) {
-    if (el) el.classList.remove('visible');
-  }
-  function toggle(el, condition) {
-    if (condition) show(el); else hide(el);
-  }
+    document.body.append(dlg);
+    dlg.showModal();
+    input.focus();
+  });
+}
 
-  // ---- Format bytes ----
-  function formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-  }
-
-  return { toast, setProgress, showProgress, hideProgress, setButtonLoading, show, hide, toggle, formatBytes };
-})();
+/** Confirmación sí/no. Resuelve true/false. */
+export function confirmDialog({ title, message = '', confirmText = 'Continuar', cancelText = 'Cancelar', danger = false }) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; dlg.close(); dlg.remove(); resolve(v); };
+    const dlg = h('dialog', { class: 'dialog' },
+      h('div', { class: 'dialog__body' },
+        h('h2', { class: 'dialog__title' }, title),
+        message ? h('p', { class: 'dialog__msg' }, message) : null,
+        h('div', { class: 'dialog__actions' },
+          h('button', { type: 'button', class: 'btn btn-ghost', onclick: () => finish(false) }, cancelText),
+          h('button', { type: 'button', class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`, onclick: () => finish(true) }, confirmText),
+        ),
+      ),
+    );
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(false); });
+    document.body.append(dlg);
+    dlg.showModal();
+    dlg.querySelector('.btn-primary, .btn-danger').focus();
+  });
+}

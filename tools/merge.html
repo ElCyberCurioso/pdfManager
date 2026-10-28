@@ -2,118 +2,75 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
   <title>Unir PDFs — PDF Manager</title>
+  <meta name="description" content="Une varios PDFs en uno en tu navegador: ordena arrastrando, elige páginas de cada archivo y añade marcadores. Sin subir nada.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
   <link rel="stylesheet" href="../assets/css/base.css">
   <link rel="stylesheet" href="../assets/css/components.css">
   <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/merge.js"></script>
 </head>
-<body>
+<body data-tool="merge">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
 
-  <header class="site-header">
-    <div class="site-header__inner">
-      <a href="../index.html" class="site-logo">
-        <div class="site-logo__icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-        </div>
-        <span>PDF<span>Manager</span></span>
-      </a>
-      <nav class="breadcrumb">
-        <a href="../index.html">Inicio</a>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        <span>Unir PDFs</span>
-      </nav>
-    </div>
-  </header>
+  <main class="tool-page" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
 
-  <main class="tool-page">
-
-    <div class="tool-header">
-      <div class="tool-header__icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/>
-          <path d="M18 2h-4v10l4-2 4 2V2z"/>
-        </svg>
-      </div>
-      <h1 class="tool-header__title">Unir PDFs</h1>
-      <p class="tool-header__desc">Añade varios archivos PDF y ordénalos arrastrando. Se combinarán en un único documento.</p>
-    </div>
-
-    <!-- Drop zone -->
     <div class="drop-zone" id="dropZone">
-      <input type="file" class="drop-zone__input" id="fileInput" accept=".pdf" multiple>
-      <svg class="drop-zone__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
       <p class="drop-zone__title">Arrastra tus PDFs aquí</p>
-      <p class="drop-zone__sub">o haz clic para seleccionarlos · Puedes añadir varios a la vez</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlos · también puedes pegarlos con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
     </div>
 
-    <!-- File list -->
-    <div id="fileListWrap" style="display:none; flex-direction:column; gap: var(--space-3);">
-      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-2);">
-        <span id="fileCount" class="text-muted text-sm"></span>
-        <div style="display:flex; gap: var(--space-2);">
-          <button class="btn btn-ghost btn-sm" id="addMoreBtn">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-            Añadir más
-          </button>
-          <button class="btn btn-ghost btn-sm" id="clearAllBtn">Limpiar todo</button>
-        </div>
+    <section id="listWrap" class="flex flex-col gap-3" aria-label="Archivos a unir">
+      <div class="list-toolbar">
+        <span class="list-toolbar__info" id="listInfo" aria-live="polite"></span>
+        <button type="button" class="btn btn-outline btn-sm" id="addMoreBtn"><i data-icon="plus"></i>Añadir</button>
+        <button type="button" class="btn btn-outline btn-sm" id="sortNameBtn" title="Ordenar alfabéticamente">A→Z</button>
+        <button type="button" class="btn btn-outline btn-sm" id="reverseBtn"><i data-icon="swap"></i>Invertir</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="clearBtn"><i data-icon="trash"></i>Quitar todos</button>
       </div>
-      <input type="file" id="addMoreInput" accept=".pdf" multiple style="display:none;">
+      <p class="form-hint">Arrastra desde <i data-icon="grip" class="icon-inline"></i> o usa las flechas para cambiar el orden. En «Páginas» puedes indicar rangos como <code>1-3, 7, 10-</code>.</p>
       <div class="file-list" id="fileList"></div>
-    </div>
+    </section>
 
-    <!-- Progress -->
-    <div id="progressWrap" style="display:none;">
-      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
-      <p class="progress-label" id="progressLabel">Procesando…</p>
-    </div>
-
-    <!-- Action -->
-    <div class="action-bar" id="actionBar" style="display:none;">
-      <button class="btn btn-primary btn-lg" id="mergeBtn">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M18 2h-4v10l4-2 4 2V2z"/></svg>
-        Unir PDFs
-      </button>
-    </div>
-
-    <!-- Result -->
-    <div class="result-area" id="resultArea">
-      <div class="result-area__icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+    <section class="options-panel" id="options" aria-labelledby="optTitle">
+      <h2 class="options-panel__title" id="optTitle">Opciones</h2>
+      <div class="check-list">
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="optOutline" checked>
+          <span>Crear un marcador por archivo<small>Facilita la navegación en el PDF resultante.</small></span></label>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="optDuplex">
+          <span>Página en blanco tras documentos impares<small>Para imprimir a doble cara sin que un documento empiece en el reverso del anterior.</small></span></label>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="optDedupe" checked>
+          <span>Eliminar recursos duplicados<small>Fuentes e imágenes repetidas entre archivos se guardan una sola vez.</small></span></label>
       </div>
-      <h2 class="result-area__title">¡PDFs unidos correctamente!</h2>
-      <p class="result-area__meta" id="resultMeta"></p>
-      <button class="btn btn-primary" id="downloadBtn">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Descargar PDF unido
-      </button>
-      <button class="btn btn-ghost btn-sm" id="startOverBtn">Empezar de nuevo</button>
+      <div class="form-group" style="max-width:360px">
+        <label class="form-label" for="outName">Nombre del archivo</label>
+        <div class="input-with-unit"><input type="text" class="form-input" id="outName" value="unido" spellcheck="false"><span>.pdf</span></div>
+      </div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
     </div>
 
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="merge"></i>Unir PDFs</button>
+    </div>
+
+    <section id="result"></section>
   </main>
 
-  <footer class="site-footer">
-    <div class="site-footer__inner">
-      <p class="site-footer__copy">PDF Manager — Procesamiento 100% en el navegador. Ningún archivo se sube a servidores.</p>
-    </div>
-  </footer>
-
-  <div class="toast-container" id="toastContainer"></div>
-
-  <!-- Dependencies -->
-  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <!-- Core -->
-  <script src="../assets/js/core/ui.js"></script>
-  <script src="../assets/js/core/download.js"></script>
-  <script src="../assets/js/core/pdf-engine.js"></script>
-  <script src="../assets/js/core/file-handler.js"></script>
-  <script src="../assets/js/core/preview.js"></script>
-  <!-- Tool -->
-  <script src="../assets/js/tools/merge.js"></script>
+  <footer data-shell="footer"></footer>
 </body>
 </html>

@@ -1,99 +1,149 @@
 /* ============================================================
-   PROTECT TOOL
+   PROTEGER PDF
+   Cifrado real AES-256 (o AES-128 por compatibilidad) con
+   contraseña de apertura y/o permisos de uso.
+   (El original usaba pdf-lib estándar, que ignora las opciones
+   de cifrado: el PDF «protegido» salía en claro.)
    ============================================================ */
-(() => {
-  const dropZone     = document.getElementById('dropZone');
-  const fileInput    = document.getElementById('fileInput');
-  const optionsPanel = document.getElementById('optionsPanel');
-  const actionBar    = document.getElementById('actionBar');
-  const protectBtn   = document.getElementById('protectBtn');
-  const progressWrap = document.getElementById('progressWrap');
-  const progressBar  = document.getElementById('progressBar');
-  const progressLabel= document.getElementById('progressLabel');
-  const resultArea   = document.getElementById('resultArea');
-  const resultMeta   = document.getElementById('resultMeta');
-  const downloadBtn  = document.getElementById('downloadBtn');
-  const startOverBtn = document.getElementById('startOverBtn');
+import '../core/app.js';
+import { $, h } from '../core/dom.js';
+import { icon } from '../core/icons.js';
+import { toast, createProgress, toggle } from '../core/ui.js';
+import { loadPlain } from '../core/pdf-engine.js';
+import { passwordStrength, randomPassword } from '../core/password.js';
+import { singlePdfTool, runTask, createResultArea } from '../core/tool.js';
+import { buildName } from '../core/download.js';
 
-  let currentFile   = null;
-  let currentBuffer = null;
-  let resultBytes   = null;
+const options   = $('#options');
+const actionBar = $('#actionBar');
+const runBtn    = $('#runBtn');
+const userPwd   = $('#userPwd');
+const userPwd2  = $('#userPwd2');
+const ownerPwd  = $('#ownerPwd');
+const needOpen  = $('#needOpen');
+const progress  = createProgress($('#progress'));
+const result    = createResultArea($('#result'), { onRestart: () => tool.reset() });
 
-  FileHandler.init(dropZone, fileInput, onFileAdded);
-  protectBtn.addEventListener('click', doProtect);
-  startOverBtn.addEventListener('click', reset);
-  downloadBtn.addEventListener('click', () => {
-    if (resultBytes) Download.save(resultBytes, Download.buildName(currentFile.name, '', '_protegido'));
+const tool = singlePdfTool({ dropZone: $('#dropZone'), summary: $('#fileSummary'), onLoad, onReset });
+
+// Mostrar/ocultar contraseñas
+document.querySelectorAll('.password-toggle').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.dataset.target);
+    input.type = input.type === 'password' ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', String(input.type === 'text'));
   });
+});
 
-  // Password visibility toggles
-  document.querySelectorAll('.password-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = document.getElementById(btn.dataset.target);
-      if (!input) return;
-      input.type = input.type === 'password' ? 'text' : 'password';
-    });
+userPwd.addEventListener('input', paintStrength);
+[userPwd, userPwd2].forEach((el) => el.addEventListener('input', checkMatch));
+needOpen.addEventListener('change', () => { toggle($('#openBox'), needOpen.checked); result.hide(); });
+$('#genBtn').addEventListener('click', () => {
+  const pw = randomPassword(20);
+  userPwd.value = userPwd2.value = pw;
+  userPwd.type = userPwd2.type = 'text';
+  paintStrength();
+  checkMatch();
+  toast('Contraseña generada: cópiala antes de cerrar la página.', 'info');
+});
+runBtn.addEventListener('click', () => runTask(runBtn, progress, protect));
+
+function onLoad(ctx) {
+  result.hide();
+  toggle(options, true);
+  toggle(actionBar, true);
+  $('#reEncryptNote').hidden = !ctx.encryption;
+  userPwd.focus();
+}
+
+function onReset() {
+  userPwd.value = userPwd2.value = ownerPwd.value = '';
+  paintStrength();
+  toggle(options, false);
+  toggle(actionBar, false);
+  result.hide();
+}
+
+function paintStrength() {
+  const s = passwordStrength(userPwd.value);
+  const el = $('#strength');
+  el.dataset.level = userPwd.value ? String(s.level) : '';
+  $('#strengthLabel').textContent = userPwd.value ? s.label : '';
+}
+
+function checkMatch() {
+  const bad = userPwd2.value && userPwd.value !== userPwd2.value;
+  userPwd2.setAttribute('aria-invalid', bad ? 'true' : 'false');
+  $('#matchError').hidden = !bad;
+}
+
+function permissions() {
+  const print = $('#permPrint').value;
+  return {
+    printing: print === 'none' ? false : print === 'low' ? 'lowResolution' : 'highResolution',
+    copying: $('#permCopy').checked,
+    modifying: $('#permModify').checked,
+    annotating: $('#permAnnotate').checked,
+    fillingForms: $('#permForms').checked,
+    documentAssembly: $('#permAssembly').checked,
+    contentAccessibility: $('#permAccess').checked,
+  };
+}
+
+async function protect() {
+  const ctx = tool.current;
+  const wantsOpen = needOpen.checked;
+  const user = wantsOpen ? userPwd.value : '';
+  if (wantsOpen) {
+    if (!user) throw new Error('Escribe la contraseña de apertura (o desmarca «Exigir contraseña para abrir»).');
+    if (user !== userPwd2.value) throw new Error('Las contraseñas no coinciden.');
+  }
+  const perms = permissions();
+  const restricted = Object.values(perms).filter((v) => v !== true && v !== 'highResolution').length;
+  if (!wantsOpen && restricted === 0) throw new Error('No hay nada que proteger: añade una contraseña de apertura o quita algún permiso.');
+
+  // Sin contraseña de propietario, cualquiera con la de apertura podría
+  // quitar las restricciones: generamos una aleatoria y la mostramos.
+  let owner = ownerPwd.value;
+  const generated = !owner;
+  if (!owner) owner = randomPassword(24);
+  if (owner === user && restricted) {
+    throw new Error('La contraseña de propietario debe ser distinta de la de apertura; si no, los permisos no protegen nada.');
+  }
+  const algorithm = $('#algo').value;
+
+  progress.set(30, 'Cifrando…');
+  const doc = await loadPlain(ctx.bytes);
+  doc.encrypt({ userPassword: user, ownerPassword: owner, permissions: perms, algorithm });
+  progress.set(70, 'Guardando…');
+  const bytes = await doc.save({ useObjectStreams: true });
+  progress.set(100, 'Listo');
+
+  const notes = [];
+  if (!wantsOpen) notes.push({ type: 'info', text: 'El PDF se abre sin contraseña. Las restricciones las aplican los visores, pero no impiden leer el contenido.' });
+  const extra = generated && restricted
+    ? h('div', { class: 'flex flex-col gap-2', style: { width: '100%', maxWidth: '620px' } },
+        h('span', { class: 'form-label' }, 'Contraseña de propietario generada (guárdala para poder cambiar los permisos):'),
+        h('div', { class: 'secret-box' },
+          h('span', { class: 'grow', 'data-testid': 'owner-password' }, owner),
+          h('button', {
+            type: 'button', class: 'btn btn-ghost btn-sm', onclick: async () => {
+              try { await navigator.clipboard.writeText(owner); toast('Copiada al portapapeles', 'success'); }
+              catch { toast('No se pudo copiar: selecciónala manualmente.', 'warning'); }
+            },
+          }, icon('copy'), 'Copiar')))
+    : null;
+
+  result.show({
+    title: '¡PDF protegido!',
+    meta: [algorithm, wantsOpen ? 'con contraseña de apertura' : 'sin contraseña de apertura', restricted ? `${restricted} restricción(es)` : 'sin restricciones'].join(' · '),
+    notes,
+    extra,
+    files: [{ name: buildName(ctx.file.name, '_protegido'), data: bytes }],
   });
+  toast('PDF cifrado correctamente', 'success');
+}
 
-  async function onFileAdded([file]) {
-    currentFile   = file;
-    currentBuffer = await PDFEngine.fileToBuffer(file).catch(() => null);
-    if (!currentBuffer) { UI.toast('Error al leer el PDF', 'error'); return; }
-    UI.show(optionsPanel);
-    actionBar.style.display = 'flex';
-    UI.hide(resultArea);
-  }
-
-  async function doProtect() {
-    const userPwd  = document.getElementById('userPwd').value.trim();
-    const ownerPwd = document.getElementById('ownerPwd').value.trim() || userPwd;
-
-    if (!userPwd) { UI.toast('Introduce al menos la contraseña de apertura', 'warning'); return; }
-
-    const allowPrint  = document.getElementById('permPrint').checked;
-    const allowCopy   = document.getElementById('permCopy').checked;
-    const allowModify = document.getElementById('permModify').checked;
-
-    UI.setButtonLoading(protectBtn, true);
-    progressWrap.style.display = 'block';
-    UI.hide(resultArea);
-
-    try {
-      UI.setProgress(progressBar, progressLabel, 30, 'Cargando PDF…');
-      const doc = await PDFEngine.load(PDFEngine.cloneBuffer(currentBuffer));
-
-      UI.setProgress(progressBar, progressLabel, 60, 'Aplicando protección…');
-
-      const permissions = {};
-      if (allowPrint)  permissions.printing       = PDFLib.PrintingAllowedValues.LowResolution;
-      if (allowCopy)   permissions.copying        = true;
-      if (allowModify) permissions.modifying      = true;
-      permissions.annotating    = true;
-      permissions.fillingForms  = true;
-      permissions.contentAccessibility = true;
-      permissions.documentAssembly     = allowModify;
-
-      resultBytes = await doc.save({ userPassword: userPwd, ownerPassword: ownerPwd, permissions });
-      UI.setProgress(progressBar, progressLabel, 100, 'Listo');
-
-      resultMeta.textContent = `Contraseña configurada · ${UI.formatBytes(resultBytes.byteLength)}`;
-      UI.show(resultArea);
-      UI.toast('PDF protegido correctamente', 'success');
-    } catch (err) {
-      UI.toast(`Error: ${err.message}`, 'error');
-    } finally {
-      UI.setButtonLoading(protectBtn, false);
-      setTimeout(() => { progressWrap.style.display = 'none'; }, 1200);
-    }
-  }
-
-  function reset() {
-    currentFile = null; currentBuffer = null; resultBytes = null;
-    document.getElementById('userPwd').value  = '';
-    document.getElementById('ownerPwd').value = '';
-    UI.hide(optionsPanel);
-    actionBar.style.display = 'none';
-    progressWrap.style.display = 'none';
-    UI.hide(resultArea);
-  }
-})();
+toggle(options, false);
+toggle(actionBar, false);
+paintStrength();

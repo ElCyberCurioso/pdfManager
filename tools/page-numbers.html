@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Numerar páginas — PDF Manager</title>
+  <meta name="description" content="Añade números de página, encabezados o pies a tu PDF con vista previa: formato, posición, primer número y modo doble cara. Sin subir archivos.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/page-numbers.js"></script>
+</head>
+<body data-tool="page-numbers">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
+
+  <main class="tool-page tool-page--wide" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo · también puedes pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    </div>
+    <div id="fileSummary"></div>
+
+    <section id="editor" class="tool-two-col">
+      <div class="preview-stage sticky-col">
+        <div class="preview-canvas-wrap" id="previewWrap"><canvas id="previewCanvas" role="img" aria-label="Vista previa de la página numerada"></canvas></div>
+        <p class="form-error" id="previewError" role="alert" hidden></p>
+        <div id="pager"></div>
+      </div>
+
+      <div class="options-panel">
+        <div class="form-group">
+          <label class="form-label" for="preset">Formato</label>
+          <select class="form-select" id="preset">
+            <option value="{n}" selected>1, 2, 3…</option>
+            <option value="Página {n}">Página 1</option>
+            <option value="Página {n} de {total}">Página 1 de 10</option>
+            <option value="{n} / {total}">1 / 10</option>
+            <option value="- {n} -">- 1 -</option>
+            <option value="">Personalizado…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="template">Texto</label>
+          <input type="text" class="form-input" id="template" value="{n}" spellcheck="false">
+          <span class="form-hint">Variables: <code>{n}</code> número, <code>{total}</code> último número, <code>{fecha}</code> y <code>{archivo}</code>. También sirve para encabezados y pies («Confidencial — {archivo}»).</span>
+        </div>
+
+        <div class="flex gap-6 flex-wrap items-center">
+          <div class="form-group">
+            <span class="form-label">Posición</span>
+            <div class="pos-picker" role="radiogroup" aria-label="Posición">
+              <label title="Arriba izquierda"><input type="radio" name="wmPos" value="top-left" aria-label="Arriba izquierda"></label>
+              <label title="Arriba centro"><input type="radio" name="wmPos" value="top-center" aria-label="Arriba centro"></label>
+              <label title="Arriba derecha"><input type="radio" name="wmPos" value="top-right" aria-label="Arriba derecha"></label>
+              <label title="Centro izquierda"><input type="radio" name="wmPos" value="middle-left" aria-label="Centro izquierda"></label>
+              <label title="Centro"><input type="radio" name="wmPos" value="center" aria-label="Centro" checked></label>
+              <label title="Centro derecha"><input type="radio" name="wmPos" value="middle-right" aria-label="Centro derecha"></label>
+              <label title="Abajo izquierda"><input type="radio" name="wmPos" value="bottom-left" aria-label="Abajo izquierda"></label>
+              <label title="Abajo centro"><input type="radio" name="wmPos" value="bottom-center" aria-label="Abajo centro"></label>
+              <label title="Abajo derecha"><input type="radio" name="wmPos" value="bottom-right" aria-label="Abajo derecha"></label>
+            </div>
+          </div>
+          <label class="check-group"><input type="checkbox" class="form-checkbox" id="mirror"><span>Alternar en páginas pares<small>Para impresión a doble cara: izquierda ↔ derecha.</small></span></label>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="pages">Páginas a numerar</label>
+            <input type="text" class="form-input" id="pages" placeholder="Todas" spellcheck="false">
+            <span class="form-hint">Ej.: <code>2-</code> para no numerar la portada.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="start">Primer número</label>
+            <input type="number" class="form-input" id="start" value="1">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="font">Fuente</label>
+            <select class="form-select" id="font"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="color">Color</label>
+            <input type="color" class="form-input" id="color" value="#1a202c">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="size">Tamaño</label>
+            <div class="range-wrap"><input type="range" class="form-input" id="size" min="6" max="36" value="11"><span class="range-value" id="sizeVal"></span></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="margin">Margen</label>
+            <div class="input-with-unit"><input type="number" class="form-input" id="margin" min="0" max="80" value="12"><span>mm</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
+    </div>
+
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="hash"></i>Numerar páginas</button>
+    </div>
+
+    <section id="result"></section>
+  </main>
+
+  <footer data-shell="footer"></footer>
+</body>
+</html>

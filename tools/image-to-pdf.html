@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Imágenes a PDF — PDF Manager</title>
+  <meta name="description" content="Convierte fotos JPG, PNG o WebP en un PDF: ordena, gira, elige tamaño de página y márgenes. Sin subir archivos.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/image-to-pdf.js"></script>
+</head>
+<body data-tool="image-to-pdf">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
+
+  <main class="tool-page" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input">
+      <i data-icon="images" class="drop-zone__icon"></i>
+      <p class="drop-zone__title">Arrastra tus imágenes aquí</p>
+      <p class="drop-zone__sub">JPG, PNG, WebP, GIF, BMP o AVIF · también puedes pegarlas con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    </div>
+
+    <section id="listWrap" class="flex flex-col gap-3" aria-label="Imágenes">
+      <div class="list-toolbar">
+        <span class="list-toolbar__info" id="listInfo" aria-live="polite"></span>
+        <button type="button" class="btn btn-outline btn-sm" id="addMoreBtn"><i data-icon="plus"></i>Añadir</button>
+        <button type="button" class="btn btn-outline btn-sm" id="sortNameBtn">A→Z</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="clearBtn"><i data-icon="trash"></i>Quitar todas</button>
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </section>
+
+    <section class="options-panel" id="options" aria-label="Opciones del PDF">
+      <div class="form-row">
+        <fieldset>
+          <legend>Tamaño de página</legend>
+          <div class="segmented" role="radiogroup" aria-label="Tamaño de página">
+            <label><input type="radio" name="size" value="a4" checked>A4</label>
+            <label><input type="radio" name="size" value="letter">Carta</label>
+            <label><input type="radio" name="size" value="fit">Como la imagen</label>
+          </div>
+        </fieldset>
+        <fieldset id="orientBox">
+          <legend>Orientación</legend>
+          <div class="segmented" role="radiogroup" aria-label="Orientación">
+            <label><input type="radio" name="orient" value="auto" checked>Automática</label>
+            <label><input type="radio" name="orient" value="portrait">Vertical</label>
+            <label><input type="radio" name="orient" value="landscape">Horizontal</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Margen</legend>
+          <div class="segmented" role="radiogroup" aria-label="Margen">
+            <label><input type="radio" name="margin" value="none">Sin margen</label>
+            <label><input type="radio" name="margin" value="small" checked>Pequeño</label>
+            <label><input type="radio" name="margin" value="large">Grande</label>
+          </div>
+        </fieldset>
+      </div>
+      <div class="form-group" style="max-width:360px">
+        <label class="form-label" for="outName">Nombre del archivo</label>
+        <div class="input-with-unit"><input type="text" class="form-input" id="outName" value="imagenes" spellcheck="false"><span>.pdf</span></div>
+      </div>
+      <p class="form-hint">Las fotos JPG se incrustan sin recomprimir (sin pérdida de calidad) y se respeta la orientación de las fotos del móvil.</p>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
+    </div>
+
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="filePlus"></i>Crear PDF</button>
+    </div>
+
+    <section id="result"></section>
+  </main>
+
+  <footer data-shell="footer"></footer>
+</body>
+</html>

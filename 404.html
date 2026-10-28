@@ -2,40 +2,36 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-Sv/rB4OtUQFSzjw7Ss1f8+oKrATgAIKLAwdSv7OlS7s='; base-uri 'none'; form-action 'none'">
+  <meta name="robots" content="noindex">
   <title>Página no encontrada — PDF Manager</title>
-  <link rel="stylesheet" href="assets/css/base.css">
-  <link rel="stylesheet" href="assets/css/components.css">
-  <link rel="stylesheet" href="assets/css/layout.css">
+  <!-- Página autónoma: GitHub Pages la sirve en cualquier ruta, así que no
+       puede depender de rutas relativas a CSS o JS. -->
+  <style>
+    :root { color-scheme: light dark; --p: #E8334A; --bg: #F4F6F8; --fg: #1A202C; --mut: #5A6678; --card: #fff; }
+    @media (prefers-color-scheme: dark) { :root { --p: #F0566A; --bg: #0F1115; --fg: #E8EAEE; --mut: #A3ACBA; --card: #171A21; } }
+    * { box-sizing: border-box; margin: 0; }
+    body { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); color: var(--fg);
+           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+    main { text-align: center; max-width: 440px; background: var(--card); padding: 40px 32px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+    .logo { width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 14px; background: var(--p); display: grid; place-items: center; }
+    h1 { font-size: 56px; line-height: 1; margin-bottom: 8px; }
+    p { color: var(--mut); margin-bottom: 24px; line-height: 1.6; }
+    a { display: inline-block; padding: 12px 24px; border-radius: 8px; background: var(--p); color: #fff; font-weight: 600; text-decoration: none; }
+    a:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+  </style>
 </head>
 <body>
-  <header class="site-header">
-    <div class="site-header__inner">
-      <a href="index.html" class="site-logo">
-        <div class="site-logo__icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-        </div>
-        <span>PDF<span>Manager</span></span>
-      </a>
+  <main>
+    <div class="logo" aria-hidden="true">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
     </div>
-  </header>
-
-  <main style="display:flex; align-items:center; justify-content:center; min-height: calc(100vh - 200px); padding: var(--space-8);">
-    <div style="text-align:center; max-width: 420px;">
-      <div style="font-size: 80px; line-height:1; margin-bottom: var(--space-6);">📄</div>
-      <h1 style="font-size: var(--text-4xl); margin-bottom: var(--space-4);">404</h1>
-      <p style="font-size: var(--text-lg); margin-bottom: var(--space-8);">Página no encontrada.</p>
-      <a href="index.html" class="btn btn-primary">Volver al inicio</a>
-    </div>
+    <h1>404</h1>
+    <p>Esta página no existe. Puede que el enlace esté mal escrito o que la herramienta haya cambiado de dirección.</p>
+    <a href="/" id="home">Volver a PDF Manager</a>
   </main>
-
-  <footer class="site-footer">
-    <div class="site-footer__inner">
-      <p class="site-footer__copy">PDF Manager — Procesamiento 100% en el navegador.</p>
-    </div>
-  </footer>
+  <!-- En GitHub Pages el sitio vive en /<repositorio>/: el enlace apunta ahí. -->
+  <script>(function(){var s=location.pathname.split('/').filter(Boolean);if(/\.github\.io$/.test(location.hostname)&&s.length){document.getElementById('home').href='/'+s[0]+'/';}})();</script>
 </body>
 </html>

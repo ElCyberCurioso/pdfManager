@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Editar metadatos — PDF Manager</title>
+  <meta name="description" content="Consulta y edita el título, autor, fechas y XMP de un PDF, o elimina todos los metadatos para proteger tu privacidad. Sin subir archivos.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/metadata.js"></script>
+</head>
+<body data-tool="metadata">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
+
+  <main class="tool-page" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo · también puedes pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    </div>
+    <div id="fileSummary"></div>
+
+    <section id="editor" class="flex flex-col gap-6">
+      <div class="options-panel">
+        <h2 class="options-panel__title">Propiedades del documento</h2>
+        <div class="form-row" id="fields"></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="fCreated">Fecha de creación</label>
+            <input type="datetime-local" class="form-input" id="fCreated">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fModified">Fecha de modificación</label>
+            <input type="datetime-local" class="form-input" id="fModified">
+            <label class="check-group"><input type="checkbox" class="form-checkbox" id="touchMod" checked><span>Poner la fecha actual al guardar</span></label>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fLang">Idioma (/Lang)</label>
+            <input type="text" class="form-input" id="fLang" placeholder="es-ES" spellcheck="false">
+            <span class="form-hint">Ayuda a los lectores de pantalla a pronunciar bien el texto.</span>
+          </div>
+        </div>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="dropXmp"><span>Eliminar el bloque XMP<small>Recomendado: el XMP duplica estos datos y muchos visores lo priorizan.</small></span></label>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <h2 class="options-panel__title">Ficha técnica</h2>
+        <div class="table-scroll" id="facts"></div>
+        <details class="advanced" id="xmpBox">
+          <summary>Ver metadatos XMP</summary>
+          <pre class="finding__items" id="xmpText" style="max-height:320px;white-space:pre-wrap"></pre>
+        </details>
+      </div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
+    </div>
+
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="tag"></i>Guardar metadatos</button>
+      <button type="button" class="btn btn-outline btn-lg" id="stripBtn" data-testid="strip"><i data-icon="trash"></i>Eliminar todos</button>
+    </div>
+
+    <section id="result"></section>
+  </main>
+
+  <footer data-shell="footer"></footer>
+</body>
+</html>

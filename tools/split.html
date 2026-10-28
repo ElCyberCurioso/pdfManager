@@ -2,139 +2,93 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
   <title>Dividir PDF — PDF Manager</title>
+  <meta name="description" content="Divide un PDF por rangos, cada N páginas, por marcadores o extrae páginas concretas. Todo en tu navegador, sin subir archivos.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
   <link rel="stylesheet" href="../assets/css/base.css">
   <link rel="stylesheet" href="../assets/css/components.css">
   <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/split.js"></script>
 </head>
-<body>
+<body data-tool="split">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
 
-  <header class="site-header">
-    <div class="site-header__inner">
-      <a href="../index.html" class="site-logo">
-        <div class="site-logo__icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        </div>
-        <span>PDF<span>Manager</span></span>
-      </a>
-      <nav class="breadcrumb">
-        <a href="../index.html">Inicio</a>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        <span>Dividir PDF</span>
-      </nav>
-    </div>
-  </header>
+  <main class="tool-page tool-page--wide" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
 
-  <main class="tool-page">
-
-    <div class="tool-header">
-      <div class="tool-header__icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="M21 3l-7.828 7.828A4 4 0 0 0 12 13.7V22"/></svg>
-      </div>
-      <h1 class="tool-header__title">Dividir PDF</h1>
-      <p class="tool-header__desc">Divide un PDF en varios archivos por intervalo fijo, rangos personalizados, o extrayendo páginas concretas.</p>
-    </div>
-
-    <!-- Drop zone -->
     <div class="drop-zone" id="dropZone">
-      <input type="file" class="drop-zone__input" id="fileInput" accept=".pdf">
-      <svg class="drop-zone__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
       <p class="drop-zone__title">Arrastra tu PDF aquí</p>
-      <p class="drop-zone__sub">o haz clic para seleccionarlo</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo · también puedes pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
     </div>
+    <div id="fileSummary"></div>
 
-    <!-- Options -->
-    <div class="options-panel" id="optionsPanel">
-
-      <div class="form-group">
-        <label class="form-label">Modo de división</label>
-        <div style="display:flex; flex-wrap:wrap; gap:var(--space-3);">
-          <label class="check-group"><input type="radio" name="splitMode" value="interval" checked class="form-radio"> Por intervalo fijo</label>
-          <label class="check-group"><input type="radio" name="splitMode" value="ranges" class="form-radio"> Rangos personalizados</label>
-          <label class="check-group"><input type="radio" name="splitMode" value="extract" class="form-radio"> Extraer páginas</label>
+    <section class="options-panel" id="options" aria-label="Opciones de división">
+      <fieldset>
+        <legend>¿Cómo quieres dividirlo?</legend>
+        <div class="choice-grid">
+          <label class="choice"><input type="radio" name="mode" value="ranges" checked><strong>Por rangos</strong><span>Un archivo por cada rango que indiques.</span></label>
+          <label class="choice"><input type="radio" name="mode" value="every"><strong>Cada N páginas</strong><span>Bloques del mismo tamaño.</span></label>
+          <label class="choice"><input type="radio" name="mode" value="pick"><strong>Extraer páginas</strong><span>Elige páginas en las miniaturas.</span></label>
+          <label class="choice"><input type="radio" name="mode" value="bookmarks"><strong>Por marcadores</strong><span>Un archivo por capítulo del índice.</span></label>
         </div>
+      </fieldset>
+
+      <div id="mode-ranges" class="form-group">
+        <label class="form-label" for="rangesInput">Rangos</label>
+        <input type="text" class="form-input" id="rangesInput" placeholder="Ej.: 1-3, 4-8, 9-" spellcheck="false" autocomplete="off">
+        <span class="form-hint">Separa con comas. <code>9-</code> significa «de la 9 al final» y <code>-3</code> «de la 1 a la 3».</span>
       </div>
 
-      <!-- Interval -->
-      <div id="modeInterval">
+      <div id="mode-every" class="form-group" hidden>
+        <label class="form-label" for="everyInput">Páginas por archivo</label>
+        <div class="input-with-unit" style="max-width:220px"><input type="number" class="form-input" id="everyInput" min="1" value="1"><span>páginas</span></div>
+      </div>
+
+      <div id="mode-pick" class="flex flex-col gap-4" hidden>
         <div class="form-group">
-          <label class="form-label" for="intervalNum">Dividir cada <span id="intervalLabel">1</span> página(s)</label>
-          <div class="range-wrap">
-            <input type="range" class="form-input" id="intervalNum" min="1" max="100" value="1">
-            <span class="range-value" id="intervalVal">1</span>
-          </div>
-          <span class="form-hint" id="intervalHint"></span>
+          <label class="form-label" for="pickInput">Páginas seleccionadas</label>
+          <input type="text" class="form-input" id="pickInput" placeholder="Ej.: 1, 3-5, pares, impares" spellcheck="false" autocomplete="off">
+          <span class="form-hint">Haz clic en las miniaturas (<kbd>Mayús</kbd>+clic para seleccionar un tramo) o escribe la lista. Admite «pares», «impares» y «todas».</span>
         </div>
-      </div>
-
-      <!-- Ranges -->
-      <div id="modeRanges" style="display:none;">
-        <div class="form-group">
-          <label class="form-label" for="rangesInput">Rangos de páginas</label>
-          <input type="text" class="form-input" id="rangesInput" placeholder="Ej: 1-3, 4-6, 7">
-          <span class="form-hint">Separa los rangos con comas. Cada rango genera un archivo PDF distinto.</span>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="pickSeparate"><span>Guardar cada página en un PDF distinto</span></label>
+        <div class="grid-toolbar">
+          <button type="button" class="btn btn-outline btn-sm" id="selAll">Todas</button>
+          <button type="button" class="btn btn-outline btn-sm" id="selNone">Ninguna</button>
+          <button type="button" class="btn btn-outline btn-sm" id="selInvert">Invertir</button>
         </div>
+        <div id="pageGrid"></div>
       </div>
 
-      <!-- Extract -->
-      <div id="modeExtract" style="display:none;">
-        <p class="text-sm text-muted">Haz clic en las páginas que quieres extraer a un único archivo.</p>
-        <div style="display:flex; gap:var(--space-2); margin-bottom:var(--space-3);">
-          <button class="btn btn-secondary btn-sm" id="selectAllExtract">Seleccionar todas</button>
-          <button class="btn btn-ghost btn-sm" id="deselectAllExtract">Deseleccionar</button>
-        </div>
-        <div class="page-grid" id="extractGrid"></div>
+      <div id="mode-bookmarks" class="form-group" hidden>
+        <span class="form-label">Marcadores de primer nivel</span>
+        <ul id="bookmarkList" class="text-sm" style="list-style:disc;padding-left:20px"></ul>
       </div>
 
+      <div id="planPreview" class="alert alert-info" role="status" aria-live="polite"></div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
     </div>
 
-    <!-- Progress -->
-    <div id="progressWrap" style="display:none;">
-      <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
-      <p class="progress-label" id="progressLabel">Procesando…</p>
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="split"></i>Dividir PDF</button>
     </div>
 
-    <!-- Action -->
-    <div class="action-bar" id="actionBar" style="display:none;">
-      <button class="btn btn-primary btn-lg" id="splitBtn">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="M21 3l-7.828 7.828A4 4 0 0 0 12 13.7V22"/></svg>
-        Dividir PDF
-      </button>
-    </div>
-
-    <!-- Result -->
-    <div class="result-area" id="resultArea">
-      <div class="result-area__icon">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      </div>
-      <h2 class="result-area__title">¡PDF dividido!</h2>
-      <p class="result-area__meta" id="resultMeta"></p>
-      <button class="btn btn-primary" id="downloadBtn">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Descargar ZIP
-      </button>
-      <button class="btn btn-ghost btn-sm" id="startOverBtn">Empezar de nuevo</button>
-    </div>
-
+    <section id="result"></section>
   </main>
 
-  <footer class="site-footer">
-    <div class="site-footer__inner">
-      <p class="site-footer__copy">PDF Manager — Procesamiento 100% en el navegador.</p>
-    </div>
-  </footer>
-
-  <div class="toast-container" id="toastContainer"></div>
-
-  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
-  <script src="../assets/js/core/ui.js"></script>
-  <script src="../assets/js/core/download.js"></script>
-  <script src="../assets/js/core/pdf-engine.js"></script>
-  <script src="../assets/js/core/file-handler.js"></script>
-  <script src="../assets/js/core/preview.js"></script>
-  <script src="../assets/js/tools/split.js"></script>
+  <footer data-shell="footer"></footer>
 </body>
 </html>

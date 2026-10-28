@@ -1,0 +1,21 @@
+{
+  "name": "pdfmanager",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Herramientas PDF 100% en el navegador (sitio estático, sin backend).",
+  "type": "module",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs && node scripts/build-sw.mjs",
+    "sw": "node scripts/build-sw.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test 'tests/unit/*.test.mjs'",
+    "test:e2e": "npm run fixtures && playwright test",
+    "fixtures": "node tests/fixtures/make-fixtures.mjs"
+  },
+  "devDependencies": {
+    "@cantoo/pdf-lib": "2.11.1",
+    "@playwright/test": "1.63.0",
+    "pdfjs-dist": "6.4.299"
+  }
+}

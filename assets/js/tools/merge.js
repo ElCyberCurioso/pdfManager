@@ -1,210 +1,223 @@
 /* ============================================================
-   MERGE TOOL
+   UNIR PDFs
+   - Reordenación por arrastre (ratón y táctil) o con botones.
+   - Rango de páginas opcional por archivo ("1-3, 7").
+   - Un marcador por archivo, página en blanco para dúplex y
+     deduplicación de recursos repetidos (logos, fuentes).
+   - Acepta PDFs cifrados (pide la contraseña).
    ============================================================ */
-(() => {
-  const dropZone     = document.getElementById('dropZone');
-  const fileInput    = document.getElementById('fileInput');
-  const fileListWrap = document.getElementById('fileListWrap');
-  const fileListEl   = document.getElementById('fileList');
-  const fileCountEl  = document.getElementById('fileCount');
-  const addMoreBtn   = document.getElementById('addMoreBtn');
-  const addMoreInput = document.getElementById('addMoreInput');
-  const clearAllBtn  = document.getElementById('clearAllBtn');
-  const actionBar    = document.getElementById('actionBar');
-  const mergeBtn     = document.getElementById('mergeBtn');
-  const progressWrap = document.getElementById('progressWrap');
-  const progressBar  = document.getElementById('progressBar');
-  const progressLabel= document.getElementById('progressLabel');
-  const resultArea   = document.getElementById('resultArea');
-  const resultMeta   = document.getElementById('resultMeta');
-  const downloadBtn  = document.getElementById('downloadBtn');
-  const startOverBtn = document.getElementById('startOverBtn');
+import '../core/app.js';
+import { $, h, plural } from '../core/dom.js';
+import { icon } from '../core/icons.js';
+import { toast, createProgress, formatBytes, show, hide, toggle } from '../core/ui.js';
+import { initDropZone } from '../core/file-handler.js';
+import { readFile, openPdf, loadPlain, createPdf, savePdf } from '../core/pdf-engine.js';
+import { openRender, enqueue } from '../core/render.js';
+import { makeSortable, moveItem } from '../core/sortable.js';
+import { parsePageList, PageRangeError } from '../core/ranges.js';
+import { setOutline, dedupeStreams } from '../core/pdf-objects.js';
+import { runTask, yieldToUI, createResultArea } from '../core/tool.js';
+import { stem, sanitizeFilename } from '../core/download.js';
 
-  // State
-  let files = [];          // { file: File, buffer: ArrayBuffer, pages: number }
-  let resultBytes = null;
+const dropZone  = $('#dropZone');
+const listWrap  = $('#listWrap');
+const listEl    = $('#fileList');
+const infoEl    = $('#listInfo');
+const options   = $('#options');
+const actionBar = $('#actionBar');
+const runBtn    = $('#runBtn');
+const progress  = createProgress($('#progress'));
+const result    = createResultArea($('#result'), { onRestart: clearAll });
 
-  // Init drag-drop
-  FileHandler.init(dropZone, fileInput, onFilesAdded, { multiple: true });
+/** @type {{id:number, file:File, bytes:Uint8Array, pageCount:number, encrypted:boolean, range:string, el?:HTMLElement}[]} */
+let files = [];
+let nextId = 1;
 
-  // Add more
-  addMoreBtn.addEventListener('click', () => addMoreInput.click());
-  addMoreInput.addEventListener('change', () => {
-    onFilesAdded(Array.from(addMoreInput.files));
-    addMoreInput.value = '';
-  });
+const dz = initDropZone(dropZone, { accept: 'pdf', multiple: true, onFiles: addFiles });
 
-  clearAllBtn.addEventListener('click', reset);
-  mergeBtn.addEventListener('click', doMerge);
-  startOverBtn.addEventListener('click', reset);
-  downloadBtn.addEventListener('click', () => {
-    if (resultBytes) Download.save(resultBytes, 'merged.pdf');
-  });
+$('#addMoreBtn').addEventListener('click', () => dz.open());
+$('#sortNameBtn').addEventListener('click', () => {
+  files.sort((a, b) => a.file.name.localeCompare(b.file.name, 'es', { numeric: true, sensitivity: 'base' }));
+  renderList();
+});
+$('#reverseBtn').addEventListener('click', () => { files.reverse(); renderList(); });
+$('#clearBtn').addEventListener('click', clearAll);
+runBtn.addEventListener('click', () => runTask(runBtn, progress, merge));
 
-  async function onFilesAdded(newFiles) {
-    for (const file of newFiles) {
-      try {
-        const buffer = await PDFEngine.fileToBuffer(file);
-        const pages  = await Preview.getPageCount(buffer);
-        files.push({ file, buffer, pages });
-        await addFileItem(files.length - 1);
-      } catch {
-        UI.toast(`Error al leer "${file.name}"`, 'error');
-      }
-    }
-    updateUI();
-  }
+makeSortable(listEl, {
+  itemSelector: '.file-item',
+  handleSelector: '.drag-handle',
+  onEnd: (from, to) => { files = moveItem(files, from, to); afterChange(); },
+});
 
-  async function addFileItem(idx) {
-    const { file, buffer, pages } = files[idx];
-
-    const item = document.createElement('div');
-    item.className = 'file-item';
-    item.dataset.idx = idx;
-    item.draggable = true;
-
-    // Thumbnail
-    const thumbWrap = document.createElement('div');
-    thumbWrap.className = 'file-item__thumb';
-    const canvas = document.createElement('canvas');
-    thumbWrap.appendChild(canvas);
-    Preview.renderPage(buffer, 1, canvas, 40).catch(() => {});
-
-    // Info
-    const info = document.createElement('div');
-    info.className = 'file-item__info';
-    info.innerHTML = `
-      <div class="file-item__name">${file.name}</div>
-      <div class="file-item__meta">${pages} página${pages !== 1 ? 's' : ''} · ${UI.formatBytes(file.size)}</div>
-    `;
-
-    // Actions
-    const actions = document.createElement('div');
-    actions.className = 'file-item__actions';
-    actions.innerHTML = `
-      <button class="btn btn-ghost btn-icon btn-sm" data-action="up" title="Subir">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
-      </button>
-      <button class="btn btn-ghost btn-icon btn-sm" data-action="down" title="Bajar">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <button class="btn btn-ghost btn-icon btn-sm" data-action="remove" title="Eliminar">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-      </button>
-      <span class="drag-handle" title="Arrastrar">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      </span>
-    `;
-
-    actions.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
-      const i = getItemIndex(item);
-      if (btn.dataset.action === 'up'     && i > 0)               swap(i, i - 1);
-      if (btn.dataset.action === 'down'   && i < files.length - 1) swap(i, i + 1);
-      if (btn.dataset.action === 'remove') removeFile(i);
-    });
-
-    // Drag-and-drop reorder
-    let dragSrc = null;
-    item.addEventListener('dragstart', (e) => {
-      dragSrc = item;
-      e.dataTransfer.effectAllowed = 'move';
-      setTimeout(() => item.classList.add('dragging'), 0);
-    });
-    item.addEventListener('dragend', () => {
-      item.classList.remove('dragging');
-      document.querySelectorAll('.file-item').forEach(el => el.classList.remove('drag-over'));
-    });
-    item.addEventListener('dragover', (e) => { e.preventDefault(); item.classList.add('drag-over'); });
-    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
-    item.addEventListener('drop', (e) => {
-      e.preventDefault();
-      item.classList.remove('drag-over');
-      if (!dragSrc || dragSrc === item) return;
-      const fromIdx = getItemIndex(dragSrc);
-      const toIdx   = getItemIndex(item);
-      if (fromIdx !== -1 && toIdx !== -1) swap(fromIdx, toIdx);
-    });
-
-    item.appendChild(thumbWrap);
-    item.appendChild(info);
-    item.appendChild(actions);
-    fileListEl.appendChild(item);
-  }
-
-  function getItemIndex(el) {
-    return Array.from(fileListEl.children).indexOf(el);
-  }
-
-  function swap(a, b) {
-    [files[a], files[b]] = [files[b], files[a]];
-    renderList();
-  }
-
-  function removeFile(idx) {
-    files.splice(idx, 1);
-    renderList();
-    updateUI();
-  }
-
-  function renderList() {
-    fileListEl.innerHTML = '';
-    files.forEach((_, i) => addFileItem(i));
-    updateUI();
-  }
-
-  function updateUI() {
-    const hasFiles = files.length > 0;
-    fileListWrap.style.display = hasFiles ? 'flex' : 'none';
-    actionBar.style.display    = hasFiles && files.length >= 2 ? 'flex' : 'none';
-    fileCountEl.textContent    = `${files.length} archivo${files.length !== 1 ? 's' : ''} · ${files.reduce((s, f) => s + f.pages, 0)} páginas en total`;
-    UI.hide(resultArea);
-    resultBytes = null;
-  }
-
-  async function doMerge() {
-    if (files.length < 2) { UI.toast('Añade al menos 2 PDFs', 'warning'); return; }
-
-    UI.setButtonLoading(mergeBtn, true);
-    progressWrap.style.display = 'block';
-    UI.hide(resultArea);
-
+async function addFiles(newFiles) {
+  for (const file of newFiles) {
     try {
-      const merged = await PDFEngine.create();
-      for (let i = 0; i < files.length; i++) {
-        UI.setProgress(progressBar, progressLabel,
-          Math.round((i / files.length) * 90),
-          `Procesando "${files[i].file.name}"…`
-        );
-        const donor = await PDFEngine.load(PDFEngine.cloneBuffer(files[i].buffer));
-        const indices = donor.getPageIndices();
-        const copied  = await merged.copyPages(donor, indices);
-        copied.forEach(p => merged.addPage(p));
-      }
-      UI.setProgress(progressBar, progressLabel, 95, 'Guardando…');
-      resultBytes = await PDFEngine.save(merged);
-      UI.setProgress(progressBar, progressLabel, 100, 'Listo');
-
-      const totalPages = files.reduce((s, f) => s + f.pages, 0);
-      resultMeta.textContent = `${files.length} archivos · ${totalPages} páginas · ${UI.formatBytes(resultBytes.byteLength)}`;
-      UI.show(resultArea);
-      UI.toast('PDFs unidos correctamente', 'success');
+      const raw = await readFile(file);
+      const { doc, bytes, encryption } = await openPdf(raw, { fileName: file.name });
+      files.push({ id: nextId++, file, bytes, pageCount: doc.getPageCount(), encrypted: Boolean(encryption), range: '' });
     } catch (err) {
-      UI.toast(`Error: ${err.message}`, 'error');
-    } finally {
-      UI.setButtonLoading(mergeBtn, false);
-      setTimeout(() => { progressWrap.style.display = 'none'; }, 1200);
+      if (err?.name === 'PasswordCancelledError') toast(`Se omitió «${file.name}» (sin contraseña).`, 'info');
+      else toast(`No se pudo leer «${file.name}»: ${err.message}`, 'error');
     }
   }
+  renderList();
+}
 
-  function reset() {
-    files = [];
-    resultBytes = null;
-    fileListEl.innerHTML = '';
-    fileListWrap.style.display = 'none';
-    actionBar.style.display = 'none';
-    progressWrap.style.display = 'none';
-    UI.hide(resultArea);
+function renderList() {
+  listEl.replaceChildren(...files.map(itemFor));
+  afterChange();
+}
+
+function itemFor(entry) {
+  if (entry.el) return entry.el;
+  const thumb = h('div', { class: 'file-item__thumb' }, h('span', { class: 'spinner spinner-sm' }));
+  const rangeInput = h('input', {
+    class: 'form-input', type: 'text', value: entry.range, placeholder: 'Todas las páginas',
+    'aria-label': `Páginas de ${entry.file.name}`, spellcheck: 'false', 'data-testid': 'range',
+  });
+  rangeInput.addEventListener('change', () => {
+    entry.range = rangeInput.value.trim();
+    validateRange(entry, rangeInput);
+    afterChange();
+  });
+
+  const move = (delta) => {
+    const i = files.indexOf(entry);
+    const j = i + delta;
+    if (j < 0 || j >= files.length) return;
+    files = moveItem(files, i, j);
+    renderList();
+    entry.el.querySelector(`[data-move="${delta}"]`)?.focus();
+  };
+
+  entry.el = h('div', { class: 'file-item', 'data-testid': 'file-item' },
+    h('span', { class: 'drag-handle', title: 'Arrastrar para reordenar', 'aria-hidden': 'true' }, icon('grip')),
+    thumb,
+    h('div', { class: 'file-item__info' },
+      h('div', { class: 'file-item__name', title: entry.file.name }, entry.file.name),
+      h('div', { class: 'file-item__meta' },
+        `${plural(entry.pageCount, 'página')} · ${formatBytes(entry.file.size)}`,
+        entry.encrypted ? h('span', { class: 'badge badge-warning', style: { marginLeft: '6px' } }, 'descifrado') : null),
+      h('div', { class: 'file-item__extra' },
+        h('label', { class: 'text-xs text-muted' }, 'Páginas:'), rangeInput),
+    ),
+    h('div', { class: 'file-item__actions' },
+      h('button', { type: 'button', class: 'btn btn-ghost btn-icon btn-sm', 'data-move': '-1', title: 'Subir', 'aria-label': `Subir ${entry.file.name}`, onclick: () => move(-1) }, icon('up')),
+      h('button', { type: 'button', class: 'btn btn-ghost btn-icon btn-sm', 'data-move': '1', title: 'Bajar', 'aria-label': `Bajar ${entry.file.name}`, onclick: () => move(1) }, icon('down')),
+      h('button', { type: 'button', class: 'btn btn-ghost btn-icon btn-sm', title: 'Quitar', 'aria-label': `Quitar ${entry.file.name}`, onclick: () => remove(entry) }, icon('trash')),
+    ),
+  );
+
+  // Miniatura de la primera página (en cola, para no saturar con muchos archivos)
+  enqueue(async () => {
+    const r = await openRender(entry.bytes);
+    try {
+      const c = await r.renderPage(1, { width: 88 });
+      thumb.replaceChildren(c);
+    } finally { r.destroy(); }
+  }).promise.catch(() => thumb.replaceChildren(icon('file')));
+
+  return entry.el;
+}
+
+function validateRange(entry, input) {
+  if (!entry.range) { input.removeAttribute('aria-invalid'); return true; }
+  try {
+    parsePageList(entry.range, entry.pageCount);
+    input.removeAttribute('aria-invalid');
+    input.title = '';
+    return true;
+  } catch (err) {
+    input.setAttribute('aria-invalid', 'true');
+    input.title = err.message;
+    return false;
   }
-})();
+}
+
+function remove(entry) {
+  files = files.filter((f) => f !== entry);
+  entry.el?.remove();
+  afterChange();
+}
+
+function selectedPages(entry) {
+  if (!entry.range) return Array.from({ length: entry.pageCount }, (_, i) => i);
+  return parsePageList(entry.range, entry.pageCount);
+}
+
+function afterChange() {
+  result.hide();
+  const has = files.length > 0;
+  toggle(listWrap, has);
+  toggle(options, has);
+  toggle(actionBar, has);
+  dropZone.classList.toggle('drop-zone--compact', has);
+  let total = 0;
+  for (const f of files) { try { total += selectedPages(f).length; } catch { /* rango no válido */ } }
+  infoEl.textContent = `${plural(files.length, 'archivo')} · ${plural(total, 'página')} en total`;
+  runBtn.disabled = files.length < 2 && !(files.length === 1 && files[0].range);
+  runBtn.title = runBtn.disabled ? 'Añade al menos 2 PDFs (o indica páginas de uno solo)' : '';
+}
+
+function clearAll() {
+  files = [];
+  listEl.replaceChildren();
+  afterChange();
+}
+
+async function merge() {
+  // Validación previa de rangos
+  for (const f of files) {
+    try { selectedPages(f); } catch (err) {
+      if (err instanceof PageRangeError) throw new Error(`«${f.file.name}»: ${err.message}`);
+      throw err;
+    }
+  }
+  const withOutline = $('#optOutline').checked;
+  const duplex = $('#optDuplex').checked;
+  const dedupe = $('#optDedupe').checked;
+  const outName = sanitizeFilename(($('#outName').value.trim() || 'unido').replace(/\.pdf$/i, '') + '.pdf');
+
+  const out = await createPdf();
+  const outline = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    progress.set((i / files.length) * 85, `Añadiendo «${f.file.name}» (${i + 1}/${files.length})…`);
+    await yieldToUI();
+    const src = await loadPlain(f.bytes);
+    const indices = selectedPages(f);
+    outline.push({ title: stem(f.file.name), pageIndex: out.getPageCount() });
+    const pages = await out.copyPages(src, indices);
+    pages.forEach((p) => out.addPage(p));
+    if (duplex && pages.length % 2 === 1 && i < files.length - 1) {
+      const { width, height } = pages[pages.length - 1].getSize();
+      out.addPage([width, height]);
+    }
+  }
+  if (withOutline && files.length > 1) setOutline(out, outline);
+  let deduped = 0;
+  if (dedupe) {
+    progress.set(90, 'Eliminando recursos duplicados…');
+    await yieldToUI();
+    deduped = dedupeStreams(out);
+  }
+  progress.set(95, 'Guardando…');
+  const bytes = await savePdf(out);
+  progress.set(100, 'Listo');
+
+  const notes = [];
+  if (files.some((f) => f.encrypted)) notes.push({ type: 'warning', text: 'Algún PDF de entrada estaba protegido: el resultado se guarda sin cifrar. Usa «Proteger PDF» si lo necesitas.' });
+  result.show({
+    title: '¡PDFs unidos!',
+    meta: [plural(out.getPageCount(), 'página'), deduped ? `${plural(deduped, 'recurso duplicado', 'recursos duplicados')} eliminados` : ''].filter(Boolean).join(' · '),
+    notes,
+    files: [{ name: outName, data: bytes }],
+  });
+  toast('PDFs unidos correctamente', 'success');
+}
+
+hide(listWrap);
+hide(options);
+hide(actionBar);
+show(dropZone);

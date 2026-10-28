@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Firmar PDF — PDF Manager</title>
+  <meta name="description" content="Firma un PDF dibujando tu firma, escribiéndola o subiendo una imagen, y colócala donde quieras. Sin subir el documento a ningún servidor.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/sign.js"></script>
+</head>
+<body data-tool="sign">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
+
+  <main class="tool-page tool-page--wide" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo · también puedes pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    </div>
+    <div id="fileSummary"></div>
+
+    <section id="editor" class="tool-two-col">
+      <div class="preview-stage sticky-col">
+        <div class="alert alert-warning" id="sigWarning" hidden><i data-icon="warning"></i><p>Este PDF tiene <strong>firmas digitales</strong>. Si lo modificas, dejarán de ser válidas.</p></div>
+        <div class="preview-canvas-wrap" id="previewWrap">
+          <div class="sign-stage" id="stage">
+            <canvas id="pageCanvas" role="img" aria-label="Página del documento"></canvas>
+            <div class="sign-box" id="signBox" tabindex="0" role="button" aria-label="Firma. Arrástrala para colocarla; con el teclado: flechas para moverla, + y − para cambiar su tamaño" hidden>
+              <canvas aria-hidden="true"></canvas><span class="sign-box__handle" aria-hidden="true"></span>
+            </div>
+          </div>
+        </div>
+        <div id="pager"></div>
+        <p class="form-hint text-center">Arrastra la firma para colocarla y usa el punto de la esquina para cambiar su tamaño.</p>
+      </div>
+
+      <div class="options-panel">
+        <h2 class="options-panel__title">1. Crea tu firma</h2>
+        <div class="tabs" role="tablist" aria-label="Forma de crear la firma">
+          <button type="button" class="tab" role="tab" id="tabDraw" aria-controls="tab-draw"><i data-icon="pen"></i>Dibujar</button>
+          <button type="button" class="tab" role="tab" id="tabType" aria-controls="tab-type"><i data-icon="text"></i>Escribir</button>
+          <button type="button" class="tab" role="tab" id="tabImage" aria-controls="tab-image"><i data-icon="image"></i>Imagen</button>
+        </div>
+
+        <div id="tab-draw" role="tabpanel" aria-labelledby="tabDraw" class="flex flex-col gap-2">
+          <div class="sign-pad">
+            <canvas id="padCanvas" aria-label="Zona para dibujar la firma"></canvas>
+            <div class="sign-pad__line"></div>
+            <p class="sign-pad__hint" id="padHint">Firma aquí con el ratón, el dedo o un lápiz</p>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-outline btn-sm" id="padUndo"><i data-icon="undo"></i>Deshacer trazo</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="padClear"><i data-icon="trash"></i>Borrar</button>
+          </div>
+        </div>
+
+        <div id="tab-type" role="tabpanel" aria-labelledby="tabType" class="form-row" hidden>
+          <div class="form-group">
+            <label class="form-label" for="typedName">Tu nombre</label>
+            <input type="text" class="form-input" id="typedName" autocomplete="name" placeholder="Nombre y apellidos">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="typedFont">Estilo</label>
+            <select class="form-select" id="typedFont">
+              <option value='"Segoe Script", "Brush Script MT", "Snell Roundhand", cursive'>Manuscrita</option>
+              <option value="serif">Cursiva clásica</option>
+              <option value='"Comic Sans MS", "Chalkboard SE", cursive'>Informal</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="tab-image" role="tabpanel" aria-labelledby="tabImage" class="flex flex-col gap-3" hidden>
+          <label class="btn btn-outline btn-sm" style="width:max-content"><i data-icon="upload"></i>Subir imagen de la firma<input type="file" id="signImage" accept="image/*" hidden></label>
+          <label class="check-group"><input type="checkbox" class="form-checkbox" id="removeBg" checked><span>Quitar el fondo blanco<small>Para fotos o escaneos de una firma en papel.</small></span></label>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="penColor">Color</label>
+            <select class="form-select" id="penColor">
+              <option value="#111827">Negro</option>
+              <option value="#1d4ed8" selected>Azul</option>
+              <option value="#b91c1c">Rojo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="penWidth">Grosor del trazo</label>
+            <input type="range" class="form-input" id="penWidth" min="1" max="8" value="3">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Firma lista</span>
+          <div class="sign-preview" id="signPreview"><span class="text-muted text-sm">Todavía no hay firma.</span></div>
+        </div>
+
+        <h2 class="options-panel__title">2. ¿En qué páginas?</h2>
+        <div class="segmented" role="radiogroup" aria-label="Páginas a firmar">
+          <label><input type="radio" name="where" value="current" checked>Esta página</label>
+          <label><input type="radio" name="where" value="last">Última</label>
+          <label><input type="radio" name="where" value="all">Todas</label>
+          <label><input type="radio" name="where" value="list">Elegir…</label>
+        </div>
+        <input type="text" class="form-input" id="whereList" placeholder="Ej.: 1, 3-4" aria-label="Páginas a firmar" hidden>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="addDate"><span>Añadir la fecha bajo la firma</span></label>
+      </div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
+    </div>
+
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run" disabled><i data-icon="pen"></i>Firmar PDF</button>
+    </div>
+
+    <section id="result"></section>
+  </main>
+
+  <footer data-shell="footer"></footer>
+</body>
+</html>

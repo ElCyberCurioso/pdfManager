@@ -1,0 +1,15 @@
+{
+  "@cantoo/pdf-lib": {
+    "version": "2.11.1",
+    "files": {
+      "pdf-lib/pdf-lib.esm.min.js": "sha384-CX+yKdE3UJwNFr1M12ziMpV0/PPB/cGugVgPjt+z7HF/dbs1Qr/KMB1PjJLEFypw"
+    }
+  },
+  "pdfjs-dist": {
+    "version": "6.4.299",
+    "files": {
+      "pdfjs/pdf.min.js": "sha384-oPqHr8MeYfJpkh4zgHbWYiuwabTzthRiOS5tSWsWGmCVWlwqIkS9coGro5aa48OF",
+      "pdfjs/pdf.worker.min.js": "sha384-tINN5IYq7dFaoHBUBBc2yfxGwR38mZn9GhaX31UofKYNgAg/3y8A7IjUI3GuEg/8"
+    }
+  }
+}

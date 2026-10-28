@@ -1,0 +1,14 @@
+{
+  "name": "PDF Manager",
+  "short_name": "PDF Manager",
+  "description": "Herramientas PDF que funcionan 100% en tu navegador, también sin conexión.",
+  "lang": "es",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F6F8",
+  "theme_color": "#E8334A",
+  "icons": [
+    { "src": "assets/img/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

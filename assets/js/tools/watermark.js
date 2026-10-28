@@ -1,214 +1,180 @@
 /* ============================================================
-   WATERMARK TOOL
+   MARCA DE AGUA
+   Texto o imagen, 9 posiciones o mosaico, encima o debajo del
+   contenido, páginas a elegir. La vista previa usa el mismo
+   código que el guardado (lo que ves es lo que obtienes).
    ============================================================ */
-(() => {
-  const dropZone      = document.getElementById('dropZone');
-  const fileInput     = document.getElementById('fileInput');
-  const editorArea    = document.getElementById('editorArea');
-  const actionBar     = document.getElementById('actionBar');
-  const applyBtn      = document.getElementById('applyBtn');
-  const progressWrap  = document.getElementById('progressWrap');
-  const progressBar   = document.getElementById('progressBar');
-  const progressLabel = document.getElementById('progressLabel');
-  const resultArea    = document.getElementById('resultArea');
-  const resultMeta    = document.getElementById('resultMeta');
-  const downloadBtn   = document.getElementById('downloadBtn');
-  const startOverBtn  = document.getElementById('startOverBtn');
-  const previewCanvas = document.getElementById('previewCanvas');
-  const overlayCanvas = document.getElementById('overlayCanvas');
+import '../core/app.js';
+import { $, $$, debounce, plural } from '../core/dom.js';
+import { toast, createProgress, toggle } from '../core/ui.js';
+import { loadPlain, savePdf } from '../core/pdf-engine.js';
+import { parsePageList } from '../core/ranges.js';
+import { LivePreview } from '../core/live-preview.js';
+import { prepareImage } from '../core/images.js';
+import { pageFrame } from '../core/geometry.js';
+import { FONTS, fontFor, unsupportedChar, stampText, stampImage, sendLastContentToBack, embedImageBytes } from '../core/stamp.js';
+import { singlePdfTool, runTask, yieldToUI, createResultArea, radioValue, bindRange, createPager, encryptedInputNote } from '../core/tool.js';
+import { buildName } from '../core/download.js';
 
-  const wmText     = document.getElementById('wmText');
-  const wmSize     = document.getElementById('wmSize');
-  const wmOpacity  = document.getElementById('wmOpacity');
-  const wmAngle    = document.getElementById('wmAngle');
-  const wmColor    = document.getElementById('wmColor');
-  const wmPosition = document.getElementById('wmPosition');
+const editor    = $('#editor');
+const actionBar = $('#actionBar');
+const runBtn    = $('#runBtn');
+const canvas    = $('#previewCanvas');
+const stage     = $('#previewWrap');
+const progress  = createProgress($('#progress'));
+const result    = createResultArea($('#result'), { onRestart: () => tool.reset() });
 
-  let currentFile   = null;
-  let currentBuffer = null;
-  let resultBytes   = null;
-  let debounceTimer = null;
+const el = {
+  text: $('#wmText'), font: $('#wmFont'), size: $('#wmSize'), color: $('#wmColor'),
+  opacity: $('#wmOpacity'), angle: $('#wmAngle'), imgScale: $('#wmImgScale'),
+  tile: $('#wmTile'), layer: $('#wmLayer'), pages: $('#wmPages'), margin: $('#wmMargin'),
+};
 
-  FileHandler.init(dropZone, fileInput, onFileAdded);
-  applyBtn.addEventListener('click', doApply);
-  startOverBtn.addEventListener('click', reset);
-  downloadBtn.addEventListener('click', () => {
-    if (resultBytes) Download.save(resultBytes, Download.buildName(currentFile.name, '', '_marca'));
+let preview = null;
+let logo = null; // {bytes, kind, width, height, name}
+
+// Opciones de fuente
+el.font.replaceChildren(...Object.entries(FONTS).map(([k, f]) => new Option(f.label, k, k === 'helveticaBold', k === 'helveticaBold')));
+bindRange(el.size, $('#wmSizeVal'), (v) => `${v} pt`);
+bindRange(el.opacity, $('#wmOpacityVal'), (v) => `${v}%`);
+bindRange(el.angle, $('#wmAngleVal'), (v) => `${v}°`);
+bindRange(el.imgScale, $('#wmImgScaleVal'), (v) => `${v}%`);
+
+const pager = createPager($('#pager'), () => refresh());
+const tool = singlePdfTool({ dropZone: $('#dropZone'), summary: $('#fileSummary'), onLoad, onReset });
+
+const refresh = debounce(() => renderPreview(), 120);
+editor.addEventListener('input', (e) => { if (!e.target.closest('#pager')) { result.hide(); refresh(); } });
+editor.addEventListener('change', (e) => { if (!e.target.closest('#pager')) refresh(); });
+$$('input[name="wmType"]').forEach((r) => r.addEventListener('change', syncType));
+$$('[data-angle]').forEach((b) => b.addEventListener('click', () => {
+  el.angle.value = b.dataset.angle;
+  el.angle.dispatchEvent(new Event('input', { bubbles: true }));
+}));
+$('#wmImage').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    logo = { ...(await prepareImage(file)), name: file.name };
+    $('#wmImageName').textContent = file.name;
+    refresh();
+  } catch (err) { toast(err.message, 'error'); }
+});
+runBtn.addEventListener('click', () => runTask(runBtn, progress, save));
+
+function syncType() {
+  const isText = radioValue('wmType') === 'text';
+  toggle($('#textOpts'), isText);
+  toggle($('#imageOpts'), !isText);
+  refresh();
+}
+
+function onLoad(ctx) {
+  result.hide();
+  preview = new LivePreview(canvas, ctx.bytes, (doc, page, index, total) => apply(doc, page, index, total, true));
+  toggle(editor, true);
+  toggle(actionBar, true);
+  pager.setTotal(ctx.pageCount);
+}
+
+function onReset() {
+  preview = null;
+  toggle(editor, false);
+  toggle(actionBar, false);
+  result.hide();
+}
+
+function settings() {
+  return {
+    type: radioValue('wmType'),
+    text: el.text.value.trim() || 'CONFIDENCIAL',
+    font: el.font.value,
+    size: Number(el.size.value),
+    color: el.color.value,
+    opacity: Number(el.opacity.value) / 100,
+    angle: Number(el.angle.value),
+    imgScale: Number(el.imgScale.value) / 100,
+    position: radioValue('wmPos') || 'center',
+    tile: el.tile.checked,
+    under: el.layer.value === 'under',
+    margin: Math.max(0, Number(el.margin.value) || 0) * 72 / 25.4, // mm → pt
+  };
+}
+
+/** Páginas afectadas (índices 0-based). */
+function targetPages(total) {
+  const v = el.pages.value.trim();
+  return new Set(v ? parsePageList(v, total) : Array.from({ length: total }, (_, i) => i));
+}
+
+const embedded = new WeakMap(); // doc → imagen incrustada
+
+/** Aplica la marca a una página. Se usa igual en la vista previa y al guardar. */
+async function apply(doc, page, index, total, isPreview = false) {
+  const s = settings();
+  if (isPreview) {
+    let pages;
+    try { pages = targetPages(total); } catch { pages = new Set(); }
+    if (!pages.has(index)) return;
+  }
+  if (s.type === 'text') {
+    const font = await fontFor(doc, s.font);
+    const bad = unsupportedChar(font, s.text);
+    if (bad) throw new Error(`El carácter «${bad}» no está disponible en las fuentes estándar del PDF.`);
+    stampText(page, { text: s.text, font, size: s.size, color: s.color, opacity: s.opacity, angle: s.angle, position: s.position, margin: s.margin, tile: s.tile });
+  } else {
+    if (!logo) return;
+    let img = embedded.get(doc);
+    if (!img) { img = await embedImageBytes(doc, logo.bytes, logo.kind); embedded.set(doc, img); }
+    const width = pageFrame(page).vw * s.imgScale;
+    stampImage(page, { image: img, width, angle: s.angle, opacity: s.opacity, position: s.position, margin: s.margin, tile: s.tile });
+  }
+  if (s.under) sendLastContentToBack(page);
+}
+
+async function renderPreview() {
+  if (!preview || !tool.current) return;
+  stage.classList.add('is-loading');
+  try {
+    await preview.render(pager.index, tool.current.pageCount);
+    $('#previewError').hidden = true;
+  } catch (err) {
+    $('#previewError').hidden = false;
+    $('#previewError').textContent = err.message;
+  } finally {
+    stage.classList.remove('is-loading');
+  }
+}
+
+async function save() {
+  const ctx = tool.current;
+  const s = settings();
+  if (s.type === 'image' && !logo) throw new Error('Elige primero una imagen para la marca de agua.');
+  const pages = targetPages(ctx.pageCount);
+  const doc = await loadPlain(ctx.bytes);
+  const all = doc.getPages();
+  let n = 0;
+  for (const i of pages) {
+    await apply(doc, all[i], i, all.length);
+    if (++n % 10 === 0) { progress.set((n / pages.size) * 90, `Página ${n} de ${pages.size}…`); await yieldToUI(); }
+  }
+  progress.set(92, 'Guardando…');
+  const bytes = await savePdf(doc);
+  progress.set(100, 'Listo');
+  const notes = [];
+  if (s.under) notes.push({ type: 'info', text: 'La marca está debajo del contenido: no se verá en páginas con fondo opaco (p. ej. escaneos). En ese caso usa «Encima».' });
+  const enc = encryptedInputNote(ctx);
+  if (enc) notes.push(enc);
+  result.show({
+    title: '¡Marca de agua añadida!',
+    meta: plural(pages.size, 'página'),
+    notes,
+    files: [{ name: buildName(ctx.file.name, '_marca'), data: bytes }],
   });
+  toast('Marca de agua aplicada', 'success');
+}
 
-  // Live preview on any control change
-  [wmText, wmSize, wmOpacity, wmAngle, wmColor, wmPosition].forEach(el => {
-    el.addEventListener('input', () => {
-      // Update displayed values
-      document.getElementById('sizeVal').textContent    = wmSize.value;
-      document.getElementById('opacityVal').textContent = wmOpacity.value;
-      document.getElementById('angleVal').textContent   = wmAngle.value;
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(drawOverlay, 120);
-    });
-  });
-
-  async function onFileAdded([file]) {
-    currentFile   = file;
-    currentBuffer = await PDFEngine.fileToBuffer(file).catch(() => null);
-    if (!currentBuffer) { UI.toast('Error al leer el PDF', 'error'); return; }
-
-    // Render first page
-    await Preview.renderForPreview(currentBuffer, 1, previewCanvas, 500);
-    // Size overlay to match
-    overlayCanvas.width  = previewCanvas.width;
-    overlayCanvas.height = previewCanvas.height;
-
-    editorArea.style.display = 'grid';
-    actionBar.style.display  = 'flex';
-    UI.hide(resultArea);
-    resultBytes = null;
-    drawOverlay();
-  }
-
-  function drawOverlay() {
-    const text    = wmText.value || 'MARCA DE AGUA';
-    const size    = parseInt(wmSize.value);
-    const opacity = parseInt(wmOpacity.value) / 100;
-    const angle   = parseInt(wmAngle.value) * (Math.PI / 180);
-    const color   = wmColor.value;
-    const mode    = wmPosition.value;
-
-    const w = overlayCanvas.width;
-    const h = overlayCanvas.height;
-    const ctx = overlayCanvas.getContext('2d');
-    ctx.clearRect(0, 0, w, h);
-
-    ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.fillStyle   = color;
-    ctx.font        = `bold ${size}px sans-serif`;
-    ctx.textAlign   = 'center';
-    ctx.textBaseline= 'middle';
-
-    // Canvas y-down: positive rotate = clockwise.
-    // pdf-lib y-up:  positive degrees = counterclockwise.
-    // Negate angle in canvas so both produce same visual direction.
-    const canvasAngle = -angle;
-
-    if (mode === 'center') {
-      ctx.translate(w / 2, h / 2);
-      ctx.rotate(canvasAngle);
-      ctx.fillText(text, 0, 0);
-    } else {
-      // Tile
-      const stepX = Math.max(ctx.measureText(text).width + size * 2, w / 3);
-      const stepY = size * 4;
-      for (let y = stepY / 2; y < h + stepY; y += stepY) {
-        for (let x = stepX / 2; x < w + stepX; x += stepX) {
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.rotate(canvasAngle);
-          ctx.fillText(text, 0, 0);
-          ctx.restore();
-        }
-      }
-    }
-    ctx.restore();
-  }
-
-  async function doApply() {
-    const text = wmText.value.trim();
-    if (!text) { UI.toast('Introduce el texto de la marca de agua', 'warning'); return; }
-
-    const size     = parseInt(wmSize.value);
-    const opacity  = parseInt(wmOpacity.value) / 100;
-    const angleDeg = parseInt(wmAngle.value);
-    const hex      = wmColor.value;
-    const mode     = wmPosition.value;
-
-    // Parse hex color → 0–1 rgb
-    const r = parseInt(hex.slice(1, 3), 16) / 255;
-    const g = parseInt(hex.slice(3, 5), 16) / 255;
-    const b = parseInt(hex.slice(5, 7), 16) / 255;
-
-    UI.setButtonLoading(applyBtn, true);
-    progressWrap.style.display = 'block';
-    UI.hide(resultArea);
-
-    try {
-      UI.setProgress(progressBar, progressLabel, 20, 'Cargando PDF…');
-      const doc       = await PDFEngine.load(PDFEngine.cloneBuffer(currentBuffer));
-      const font      = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
-      const pages     = doc.getPages();
-      const color     = PDFLib.rgb(r, g, b);
-      const totalPgs  = pages.length;
-
-      for (let i = 0; i < totalPgs; i++) {
-        UI.setProgress(progressBar, progressLabel,
-          20 + Math.round((i / totalPgs) * 70),
-          `Añadiendo marca a página ${i + 1} de ${totalPgs}…`
-        );
-        const page = pages[i];
-        const { width, height } = page.getSize();
-        const textWidth = font.widthOfTextAtSize(text, size);
-
-        // pdf-lib rotates text around (x, y) counterclockwise (y-up space).
-        // To keep visual center at (cx, cy) after rotation by θ:
-        //   x = cx - (textWidth/2)*cos(θ) + (fontSize/2)*sin(θ)
-        //   y = cy - (textWidth/2)*sin(θ) - (fontSize/2)*cos(θ)
-        const θ = angleDeg * (Math.PI / 180);
-
-        function anchorFor(cx, cy, tw, fs) {
-          return {
-            x: cx - (tw / 2) * Math.cos(θ) + (fs / 2) * Math.sin(θ),
-            y: cy - (tw / 2) * Math.sin(θ) - (fs / 2) * Math.cos(θ),
-          };
-        }
-
-        if (mode === 'center') {
-          const { x, y } = anchorFor(width / 2, height / 2, textWidth, size);
-          page.drawText(text, {
-            x, y, size, font, color, opacity,
-            rotate: PDFLib.degrees(angleDeg),
-          });
-        } else {
-          // Tile across page
-          const tileSize  = Math.round(size * 0.7);
-          const tileWidth = font.widthOfTextAtSize(text, tileSize);
-          const stepX = Math.max(tileWidth + tileSize * 2, width / 3);
-          const stepY = tileSize * 4;
-          for (let cy = stepY / 2; cy < height + stepY; cy += stepY) {
-            for (let cx = stepX / 2; cx < width + stepX; cx += stepX) {
-              const { x, y } = anchorFor(cx, cy, tileWidth, tileSize);
-              page.drawText(text, {
-                x, y,
-                size:   tileSize,
-                font, color, opacity,
-                rotate: PDFLib.degrees(angleDeg),
-              });
-            }
-          }
-        }
-      }
-
-      UI.setProgress(progressBar, progressLabel, 95, 'Guardando…');
-      resultBytes = await PDFEngine.save(doc);
-      UI.setProgress(progressBar, progressLabel, 100, 'Listo');
-
-      resultMeta.textContent = `Marca "${text}" en ${totalPgs} página${totalPgs !== 1 ? 's' : ''} · ${UI.formatBytes(resultBytes.byteLength)}`;
-      UI.show(resultArea);
-      UI.toast('Marca de agua aplicada', 'success');
-    } catch (err) {
-      UI.toast(`Error: ${err.message}`, 'error');
-    } finally {
-      UI.setButtonLoading(applyBtn, false);
-      setTimeout(() => { progressWrap.style.display = 'none'; }, 1200);
-    }
-  }
-
-  function reset() {
-    currentFile = null; currentBuffer = null; resultBytes = null;
-    editorArea.style.display = 'none';
-    actionBar.style.display  = 'none';
-    progressWrap.style.display = 'none';
-    UI.hide(resultArea);
-    const ctx = overlayCanvas.getContext('2d');
-    ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  }
-})();
+toggle(editor, false);
+toggle(actionBar, false);
+syncType();

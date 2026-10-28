@@ -1,1 +1,15 @@
+# Dependencias de desarrollo (las librerías del sitio están en assets/vendor/)
+node_modules/
+
+# Resultados de tests
+test-results/
+playwright-report/
+blob-report/
+tests/fixtures/out/
+
+# Editor / herramientas locales
 .claude/*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

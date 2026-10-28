@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Analizar y sanear — PDF Manager</title>
+  <meta name="description" content="Analiza si un PDF es sospechoso (JavaScript, acciones automáticas, adjuntos, enlaces, ofuscación) y genera una copia limpia. Análisis local, sin subir el archivo.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/inspect.js"></script>
+</head>
+<body data-tool="inspect">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
+
+  <main class="tool-page" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo · también puedes pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    </div>
+    <div id="fileSummary"></div>
+
+    <section id="report" class="flex flex-col gap-4" aria-label="Informe de seguridad">
+      <div class="score" id="score" data-level="ok" role="status"></div>
+      <div class="list-toolbar">
+        <h2 class="options-panel__title list-toolbar__info">Hallazgos</h2>
+        <button type="button" class="btn btn-outline btn-sm" id="mdBtn"><i data-icon="download"></i>Informe .md</button>
+        <button type="button" class="btn btn-outline btn-sm" id="jsonBtn"><i data-icon="download"></i>.json</button>
+      </div>
+      <div class="findings" id="findings"></div>
+      <details class="advanced">
+        <summary>Huella del archivo y recuento de palabras clave (estilo pdfid)</summary>
+        <div class="flex flex-col gap-3">
+          <div class="table-scroll" id="fingerprint"></div>
+          <div class="table-scroll" id="pdfid"></div>
+        </div>
+      </details>
+    </section>
+
+    <section class="options-panel" id="sanitizer" aria-labelledby="sanTitle">
+      <h2 class="options-panel__title" id="sanTitle">Sanear el PDF</h2>
+      <p class="form-hint">Genera una copia limpia reconstruida desde cero. El contenido visible (texto, imágenes) no cambia.</p>
+      <div class="check-list">
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="sScripts" checked><span>JavaScript y acciones automáticas<small>OpenAction, /AA, Launch, ImportData, SubmitForm, GoToR…</small></span></label>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="sAttach"><span>Archivos adjuntos</span></label>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="sLinks"><span>Enlaces a sitios web</span></label>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="sXfa" checked><span>Formularios XFA</span></label>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="sMedia" checked><span>Multimedia, Flash y 3D</span></label>
+        <label class="check-group"><input type="checkbox" class="form-checkbox" id="sMeta"><span>Metadatos (autor, software, XMP)</span></label>
+      </div>
+      <div class="alert alert-info"><i data-icon="info"></i><p>Este análisis es estático y local: ayuda a decidir si un PDF es de fiar, pero no sustituye a un antivirus ni a un análisis en entorno aislado.</p></div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
+    </div>
+
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="shield"></i>Sanear PDF</button>
+    </div>
+
+    <section id="result"></section>
+  </main>
+
+  <footer data-shell="footer"></footer>
+</body>
+</html>

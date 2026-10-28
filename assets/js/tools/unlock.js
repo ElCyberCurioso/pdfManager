@@ -1,95 +1,85 @@
 /* ============================================================
-   UNLOCK TOOL
+   DESBLOQUEAR PDF
+   Quita la contraseña (si la conoces) o las restricciones de
+   uso, y muestra cómo estaba protegido el documento.
    ============================================================ */
-(() => {
-  const dropZone     = document.getElementById('dropZone');
-  const fileInput    = document.getElementById('fileInput');
-  const optionsPanel = document.getElementById('optionsPanel');
-  const actionBar    = document.getElementById('actionBar');
-  const unlockBtn    = document.getElementById('unlockBtn');
-  const progressWrap = document.getElementById('progressWrap');
-  const progressBar  = document.getElementById('progressBar');
-  const progressLabel= document.getElementById('progressLabel');
-  const resultArea   = document.getElementById('resultArea');
-  const resultMeta   = document.getElementById('resultMeta');
-  const downloadBtn  = document.getElementById('downloadBtn');
-  const startOverBtn = document.getElementById('startOverBtn');
+import '../core/app.js';
+import { $, h } from '../core/dom.js';
+import { icon } from '../core/icons.js';
+import { toast, createProgress, toggle } from '../core/ui.js';
+import { loadPlain, savePdf } from '../core/pdf-engine.js';
+import { singlePdfTool, runTask, createResultArea } from '../core/tool.js';
+import { buildName } from '../core/download.js';
 
-  let currentFile   = null;
-  let currentBuffer = null;
-  let resultBytes   = null;
+const infoBox   = $('#info');
+const actionBar = $('#actionBar');
+const runBtn    = $('#runBtn');
+const progress  = createProgress($('#progress'));
+const result    = createResultArea($('#result'), { onRestart: () => tool.reset() });
 
-  FileHandler.init(dropZone, fileInput, onFileAdded);
-  unlockBtn.addEventListener('click', doUnlock);
-  startOverBtn.addEventListener('click', reset);
-  downloadBtn.addEventListener('click', () => {
-    if (resultBytes) Download.save(resultBytes, Download.buildName(currentFile.name, '', '_desbloqueado'));
-  });
+const tool = singlePdfTool({ dropZone: $('#dropZone'), summary: $('#fileSummary'), onLoad, onReset });
+runBtn.addEventListener('click', () => runTask(runBtn, progress, unlock));
 
-  document.querySelectorAll('.password-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = document.getElementById(btn.dataset.target);
-      if (!input) return;
-      input.type = input.type === 'password' ? 'text' : 'password';
-    });
-  });
+const PERM_LABELS = {
+  printing: 'Imprimir',
+  copying: 'Copiar texto e imágenes',
+  modifying: 'Modificar el contenido',
+  annotating: 'Añadir comentarios',
+  fillingForms: 'Rellenar formularios',
+  assembly: 'Insertar, girar o eliminar páginas',
+  accessibility: 'Extracción para accesibilidad',
+};
 
-  // Allow Enter key to trigger unlock
-  document.getElementById('password').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') doUnlock();
-  });
-
-  async function onFileAdded([file]) {
-    currentFile   = file;
-    currentBuffer = await PDFEngine.fileToBuffer(file).catch(() => null);
-    if (!currentBuffer) { UI.toast('Error al leer el PDF', 'error'); return; }
-    UI.show(optionsPanel);
-    actionBar.style.display = 'flex';
-    UI.hide(resultArea);
-    document.getElementById('password').focus();
+function onLoad(ctx) {
+  result.hide();
+  const enc = ctx.encryption;
+  if (!enc) {
+    infoBox.replaceChildren(h('div', { class: 'alert alert-success' }, icon('check'),
+      h('p', {}, h('strong', {}, 'Este PDF no está protegido. '), 'No tiene contraseña ni restricciones de uso: no hace falta desbloquearlo.')));
+    toggle(infoBox, true);
+    toggle(actionBar, false);
+    return;
   }
+  const rows = [
+    ['Cifrado', `${enc.algorithm} (revisión ${enc.revision || '?'})`],
+    ['Contraseña de apertura', ctx.needsUserPassword ? 'Sí (la has introducido correctamente)' : 'No: solo tenía restricciones de uso'],
+    ...Object.entries(PERM_LABELS).map(([k, label]) => {
+      const v = enc.permissions[k];
+      const ok = v === true || v === 'sí';
+      return [label, h('span', { class: `badge ${ok ? 'badge-success' : v === 'baja resolución' ? 'badge-warning' : 'badge-danger'}` }, typeof v === 'string' ? v : ok ? 'permitido' : 'restringido')];
+    }),
+  ];
+  infoBox.replaceChildren(
+    enc.weak ? h('div', { class: 'alert alert-warning' }, icon('warning'),
+      h('p', {}, h('strong', {}, 'Cifrado obsoleto. '), `${enc.algorithm} se considera inseguro desde hace años: si necesitas protegerlo, vuelve a cifrarlo con AES-256 en «Proteger PDF».`)) : null,
+    h('div', { class: 'table-scroll' }, h('table', { class: 'data-table' },
+      h('caption', { class: 'sr-only' }, 'Protección del documento'),
+      h('tbody', {}, rows.map(([k, v]) => h('tr', {}, h('th', { scope: 'row' }, k), h('td', {}, v)))))),
+  );
+  toggle(infoBox, true);
+  toggle(actionBar, true);
+}
 
-  async function doUnlock() {
-    const password = document.getElementById('password').value;
+function onReset() {
+  toggle(infoBox, false);
+  toggle(actionBar, false);
+  result.hide();
+}
 
-    UI.setButtonLoading(unlockBtn, true);
-    progressWrap.style.display = 'block';
-    UI.hide(resultArea);
+async function unlock() {
+  const ctx = tool.current;
+  // ctx.bytes ya está descifrado: se reescribe para normalizarlo.
+  progress.set(50, 'Eliminando la protección…');
+  const doc = await loadPlain(ctx.bytes);
+  const bytes = await savePdf(doc);
+  progress.set(100, 'Listo');
+  result.show({
+    title: '¡PDF desbloqueado!',
+    meta: ctx.needsUserPassword ? 'contraseña eliminada' : 'restricciones eliminadas',
+    files: [{ name: buildName(ctx.file.name, '_desbloqueado'), data: bytes }],
+  });
+  toast('Protección eliminada', 'success');
+}
 
-    try {
-      UI.setProgress(progressBar, progressLabel, 30, 'Verificando contraseña…');
-      const doc = await PDFLib.PDFDocument.load(PDFEngine.cloneBuffer(currentBuffer), {
-        password,
-        ignoreEncryption: false,
-      });
-
-      UI.setProgress(progressBar, progressLabel, 70, 'Eliminando protección…');
-      // save() without password options strips the encryption
-      resultBytes = await doc.save();
-      UI.setProgress(progressBar, progressLabel, 100, 'Listo');
-
-      resultMeta.textContent = `Protección eliminada · ${UI.formatBytes(resultBytes.byteLength)}`;
-      UI.show(resultArea);
-      UI.toast('PDF desbloqueado correctamente', 'success');
-    } catch (err) {
-      const msg = err.message || '';
-      if (msg.toLowerCase().includes('password') || msg.toLowerCase().includes('encrypt')) {
-        UI.toast('Contraseña incorrecta', 'error');
-      } else {
-        UI.toast('Este PDF no está protegido o no se puede desbloquear', 'warning');
-      }
-    } finally {
-      UI.setButtonLoading(unlockBtn, false);
-      setTimeout(() => { progressWrap.style.display = 'none'; }, 1200);
-    }
-  }
-
-  function reset() {
-    currentFile = null; currentBuffer = null; resultBytes = null;
-    document.getElementById('password').value = '';
-    UI.hide(optionsPanel);
-    actionBar.style.display = 'none';
-    progressWrap.style.display = 'none';
-    UI.hide(resultArea);
-  }
-})();
+toggle(infoBox, false);
+toggle(actionBar, false);

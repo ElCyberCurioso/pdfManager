@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>PDF a imagen — PDF Manager</title>
+  <meta name="description" content="Convierte las páginas de un PDF a PNG, JPG o WebP con la resolución que elijas. Sin subir archivos: todo en tu navegador.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/pdf-to-image.js"></script>
+</head>
+<body data-tool="pdf-to-image">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
+
+  <main class="tool-page tool-page--wide" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo · también puedes pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    </div>
+    <div id="fileSummary"></div>
+
+    <section class="options-panel" id="options" aria-label="Opciones de exportación">
+      <div class="form-row">
+        <fieldset>
+          <legend>Formato</legend>
+          <div class="segmented" role="radiogroup" aria-label="Formato">
+            <label><input type="radio" name="format" value="png" checked>PNG</label>
+            <label><input type="radio" name="format" value="jpg">JPG</label>
+            <label><input type="radio" name="format" value="webp">WebP</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Resolución</legend>
+          <div class="flex gap-3 flex-wrap items-center">
+            <div class="segmented" role="radiogroup" aria-label="Resolución predefinida">
+              <label><input type="radio" name="dpiPreset" value="72">72</label>
+              <label><input type="radio" name="dpiPreset" value="150" checked>150</label>
+              <label><input type="radio" name="dpiPreset" value="300">300</label>
+            </div>
+            <div class="input-with-unit"><input type="number" class="form-input form-input--sm" id="dpi" min="36" max="600" value="150" style="width:90px" aria-label="Resolución en ppp"><span>ppp</span></div>
+          </div>
+        </fieldset>
+      </div>
+      <div class="form-group" id="qualityBox" hidden>
+        <label class="form-label" for="quality">Calidad</label>
+        <div class="range-wrap" style="max-width:420px"><input type="range" class="form-input" id="quality" min="30" max="100" value="90"><span class="range-value" id="qualityVal"></span></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pagesInput">Páginas</label>
+        <input type="text" class="form-input" id="pagesInput" spellcheck="false" autocomplete="off" placeholder="Ej.: 1-3, 7, impares">
+      </div>
+      <div class="grid-toolbar">
+        <span class="grid-toolbar__info" id="estimate" aria-live="polite"></span>
+        <button type="button" class="btn btn-outline btn-sm" id="selAll">Todas</button>
+        <button type="button" class="btn btn-outline btn-sm" id="selNone">Ninguna</button>
+      </div>
+      <div id="pageGrid"></div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
+    </div>
+
+    <div class="action-bar action-bar--sticky" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="image"></i>Convertir a imagen</button>
+    </div>
+
+    <section id="result"></section>
+  </main>
+
+  <footer data-shell="footer"></footer>
+</body>
+</html>

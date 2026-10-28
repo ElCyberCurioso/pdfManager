@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Extraer texto — PDF Manager</title>
+  <meta name="description" content="Extrae el texto de un PDF a un archivo .txt, página a página, directamente en tu navegador.">
+  <meta name="theme-color" content="#E8334A">
+  <link rel="icon" href="../assets/img/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <script src="../assets/js/theme-boot.js"></script>
+  <script type="module" src="../assets/js/tools/extract-text.js"></script>
+</head>
+<body data-tool="extract-text">
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+  <header data-shell="header"></header>
+
+  <main class="tool-page" id="main">
+    <section data-shell="tool-header"></section>
+    <noscript><div class="alert alert-warning">Esta herramienta necesita JavaScript. Todo se procesa en tu navegador.</div></noscript>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" class="drop-zone__input">
+      <i data-icon="upload" class="drop-zone__icon"></i>
+      <p class="drop-zone__title">Arrastra tu PDF aquí</p>
+      <p class="drop-zone__sub">o haz clic para seleccionarlo · también puedes pegarlo con <kbd>Ctrl</kbd>+<kbd>V</kbd></p>
+    </div>
+    <div id="fileSummary"></div>
+
+    <section class="options-panel" id="options" aria-label="Opciones">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="pagesInput">Páginas</label>
+          <input type="text" class="form-input" id="pagesInput" placeholder="Todas" spellcheck="false" autocomplete="off">
+          <span class="form-hint">Ej.: <code>1-5, 9</code>. Vacío = todas.</span>
+        </div>
+        <label class="check-group" style="align-self:center"><input type="checkbox" class="form-checkbox" id="pageHeaders" checked><span>Separar con «===== Página N =====»</span></label>
+      </div>
+    </section>
+
+    <div class="progress" id="progress" hidden>
+      <div class="progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso"><div class="progress-bar"></div></div>
+      <p class="progress-label"></p>
+    </div>
+
+    <div class="action-bar" id="actionBar">
+      <button type="button" class="btn btn-primary btn-lg" id="runBtn" data-testid="run"><i data-icon="text"></i>Extraer texto</button>
+    </div>
+
+    <section id="outputWrap" class="flex flex-col gap-2" aria-label="Texto extraído">
+      <div class="list-toolbar">
+        <span class="list-toolbar__info">Vista previa</span>
+        <button type="button" class="btn btn-outline btn-sm" id="copyBtn"><i data-icon="copy"></i>Copiar</button>
+      </div>
+      <textarea class="form-textarea text-output" id="output" readonly spellcheck="false" aria-label="Texto extraído"></textarea>
+    </section>
+
+    <section id="result"></section>
+  </main>
+
+  <footer data-shell="footer"></footer>
+</body>
+</html>
